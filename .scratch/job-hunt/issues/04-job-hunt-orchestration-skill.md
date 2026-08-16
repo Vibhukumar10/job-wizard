@@ -15,4 +15,8 @@
 
 ## Comments
 
-Built (2026-08-16): `.claude/skills/job-hunt/SKILL.md`. Orchestrates job-finder → batched (5-concurrent) resume-tailor dispatch with retry-once-then-log semantics → `shortlist.md` + seen-jobs update, all via the ticket-01 CLI wrapper rather than reimplementing logic inline. Blocked on the same missing `resume/main.tex` as tickets 02/03 for a real end-to-end run — do that once the resume is in place.
+Built (2026-08-16): `.claude/skills/job-hunt/SKILL.md`. Orchestrates job-finder → batched (5-concurrent) resume-tailor dispatch with retry-once-then-log semantics → `shortlist.md` + seen-jobs update, all via the ticket-01 CLI wrapper rather than reimplementing logic inline.
+
+Partially live-verified the same day: manually walked through the full orchestration (job-finder step from ticket 02 → resume-tailor step from ticket 03 → `render-shortlist` → wrote `runs/2026-08-16/shortlist.md` and the tailored resume) against real LinkedIn data. Did not exercise the actual `/job-hunt` skill invocation or dispatch the subagents via the Agent tool, since neither `job-finder` nor `resume-tailor` nor the `job-hunt` skill itself are recognized mid-session — they were created after the session started, so the harness needs a restart to pick up new `.claude/agents/` and `.claude/skills/` entries. Did not run `append-seen` (by user's choice, since the search profile changed to India right after this verification — no point marking a US-region job as "seen" against a search that will no longer target that region).
+
+**Follow-up for the user**: after restarting the Claude Code session, run `/job-hunt` for real to verify the skill invocation and subagent dispatch path itself, not just the underlying logic.

@@ -18,4 +18,6 @@
 
 ## Comments
 
-Built (2026-08-16): `.claude/agents/resume-tailor.md`. Scoped to summary/skills/work-experience bullets + location, explicit exclusions for education/achievements/resume.cls and fabrication, uses `pipeline.cli resume-filename` for output naming. Not yet verified against a real resume — `resume/main.tex` (user-provided) doesn't exist yet. Run standalone against a sample job description once it does.
+Built (2026-08-16): `.claude/agents/resume-tailor.md`. Scoped to summary/skills/work-experience bullets + location, explicit exclusions for education/achievements/resume.cls and fabrication, uses `pipeline.cli resume-filename` for output naming.
+
+Live-verified the same day: tailored `resume/main.tex` for the Chime shortlisted job from ticket 02's verification (manually, following the subagent's own instructions — the `resume-tailor` custom agent type isn't picked up by the Agent tool until the session restarts). Output at `runs/2026-08-16/resumes/chime-software-engineer-infrastructure.tex`: summary/skills/bullets reworded and reordered toward infra keywords (Terraform, Kubernetes, Ansible), location updated to the posting's, education/achievements/resume.cls untouched, no fabricated skills (AWS was already present in the base resume's skills list, so keeping it in the tailored version is not a fabrication).

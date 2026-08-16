@@ -11,6 +11,6 @@ max_shortlist: 50
 
 profiles:
   - keywords: "Software Engineer"
-    location: "United States"
+    location: "India"
     work_type: "remote"
-    experience_level: "mid-senior"
+    experience_level: "mid_senior"
