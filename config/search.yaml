@@ -5,12 +5,34 @@
 #
 # relevance_threshold: minimum score (1-10) a job must hit to be shortlisted.
 # max_shortlist: safety cap on shortlisted jobs per run, regardless of how many clear the threshold.
+#
+# location_preference: soft signal for relevance scoring only, not a search filter.
+# Earlier cities score higher than later ones when two postings are otherwise similar.
+# Remote postings aren't ranked against this list — remote is a first-order preference
+# in its own right (see the "profiles" entry below), not a slot in the city ordering.
 
 relevance_threshold: 7.5
 max_shortlist: 50
+
+location_preference:
+  - Noida
+  - Bengaluru
+  - Hyderabad
 
 profiles:
   - keywords: "Software Engineer"
     location: "India"
     work_type: "remote"
+    experience_level: "mid_senior"
+  - keywords: "Software Engineer"
+    location: "Noida"
+    work_type: "on_site,hybrid"
+    experience_level: "mid_senior"
+  - keywords: "Software Engineer"
+    location: "Bengaluru"
+    work_type: "on_site,hybrid"
+    experience_level: "mid_senior"
+  - keywords: "Software Engineer"
+    location: "Hyderabad"
+    work_type: "on_site,hybrid"
     experience_level: "mid_senior"

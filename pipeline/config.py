@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -20,6 +20,7 @@ class SearchConfig:
     relevance_threshold: float
     max_shortlist: int
     profiles: list[SearchProfile]
+    location_preference: list[str] = field(default_factory=list)
 
 
 def load_search_config(path: Path | str) -> SearchConfig:
@@ -47,4 +48,5 @@ def load_search_config(path: Path | str) -> SearchConfig:
         relevance_threshold=raw["relevance_threshold"],
         max_shortlist=raw["max_shortlist"],
         profiles=profiles,
+        location_preference=raw.get("location_preference", []),
     )

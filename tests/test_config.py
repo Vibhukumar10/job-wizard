@@ -69,3 +69,21 @@ def test_raises_on_empty_profiles_list(tmp_path):
 
     with pytest.raises(ValueError, match="profiles"):
         load_search_config(path)
+
+
+def test_location_preference_defaults_to_empty_list_when_absent(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML)
+
+    config = load_search_config(path)
+
+    assert config.location_preference == []
+
+
+def test_parses_location_preference_when_present(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + "\nlocation_preference:\n  - Noida\n  - Bengaluru\n  - Hyderabad\n")
+
+    config = load_search_config(path)
+
+    assert config.location_preference == ["Noida", "Bengaluru", "Hyderabad"]
