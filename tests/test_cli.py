@@ -71,3 +71,70 @@ def test_render_shortlist_command(capsys):
     main(["render-shortlist", "--jobs", jobs])
 
     assert "Backend Engineer" in capsys.readouterr().out
+
+
+def test_render_shortlist_command_includes_notion_failures(capsys):
+    notion_failures = json.dumps([{"title": "Staff Eng", "company": "Initech", "error": "rate limited"}])
+
+    main(["render-shortlist", "--notion-failures", notion_failures])
+
+    out = capsys.readouterr().out
+    assert "## Notion Sync Failures" in out
+    assert "Initech" in out
+
+
+def test_notion_database_schema_command(capsys):
+    main(["notion-database-schema"])
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["title"] == "Job Search Tracker"
+    assert parsed["properties"]["Applied"] == {"checkbox": {}}
+    assert parsed["properties"]["Job ID"] == {"rich_text": {}}
+
+
+def test_notion_properties_command_new_job(capsys):
+    job = json.dumps(
+        {
+            "job_id": "1",
+            "title": "Backend Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "score": 8.0,
+            "apply_link": "https://x/1",
+        }
+    )
+
+    main(["notion-properties", "--job", job, "--today", "2026-08-16", "--is-new"])
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["date:Date Shortlisted:start"] == "2026-08-16"
+    assert parsed["Applied"] == "__NO__"
+
+
+def test_notion_properties_command_existing_job_omits_immutable_fields(capsys):
+    job = json.dumps(
+        {
+            "job_id": "1",
+            "title": "Backend Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "score": 8.0,
+            "apply_link": "https://x/1",
+        }
+    )
+
+    main(["notion-properties", "--job", job, "--today", "2026-08-16"])
+
+    parsed = json.loads(capsys.readouterr().out)
+    assert "date:Date Shortlisted:start" not in parsed
+    assert "Applied" not in parsed
+
+
+def test_save_and_load_notion_tracker_commands(tmp_path, capsys):
+    path = tmp_path / "notion-tracker.json"
+
+    main(["save-notion-tracker", str(path), "--database-id", "db123", "--data-source-id", "collection://ds123"])
+    capsys.readouterr()
+
+    main(["load-notion-tracker", str(path)])
+    assert json.loads(capsys.readouterr().out) == {"database_id": "db123", "data_source_id": "collection://ds123"}

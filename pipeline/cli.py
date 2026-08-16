@@ -16,6 +16,13 @@ from pipeline.batching import batch_jobs
 from pipeline.config import load_search_config
 from pipeline.dedup import filter_unseen_jobs
 from pipeline.naming import resume_filename
+from pipeline.notion_tracker import (
+    DATABASE_SCHEMA,
+    DATABASE_TITLE,
+    build_notion_properties,
+    load_tracker_state,
+    save_tracker_state,
+)
 from pipeline.seen_jobs import append_seen_jobs, load_seen_jobs
 from pipeline.shortlist import render_shortlist_markdown
 
@@ -56,11 +63,32 @@ def _cmd_batch(args: argparse.Namespace) -> None:
 def _cmd_render_shortlist(args: argparse.Namespace) -> None:
     jobs = json.loads(args.jobs) if args.jobs else []
     failures = json.loads(args.failures) if args.failures else []
-    print(render_shortlist_markdown(jobs, failures))
+    notion_failures = json.loads(args.notion_failures) if args.notion_failures else []
+    print(render_shortlist_markdown(jobs, failures, notion_failures))
 
 
 def _cmd_resume_filename(args: argparse.Namespace) -> None:
     print(resume_filename(args.company, args.title))
+
+
+def _cmd_notion_database_schema(args: argparse.Namespace) -> None:
+    print(json.dumps({"title": DATABASE_TITLE, "properties": DATABASE_SCHEMA}))
+
+
+def _cmd_notion_properties(args: argparse.Namespace) -> None:
+    job = json.loads(args.job)
+    print(json.dumps(build_notion_properties(job, is_new=args.is_new, today=args.today)))
+
+
+def _cmd_load_notion_tracker(args: argparse.Namespace) -> None:
+    print(json.dumps(load_tracker_state(args.path)))
+
+
+def _cmd_save_notion_tracker(args: argparse.Namespace) -> None:
+    state = save_tracker_state(
+        {"database_id": args.database_id, "data_source_id": args.data_source_id}, args.path
+    )
+    print(json.dumps(state))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,12 +121,32 @@ def build_parser() -> argparse.ArgumentParser:
     p = subparsers.add_parser("render-shortlist", help="Render shortlist.md content")
     p.add_argument("--jobs", help="JSON list of shortlisted jobs", default="[]")
     p.add_argument("--failures", help="JSON list of failures", default="[]")
+    p.add_argument("--notion-failures", help="JSON list of Notion push failures", default="[]")
     p.set_defaults(func=_cmd_render_shortlist)
 
     p = subparsers.add_parser("resume-filename", help="Deterministic tailored-resume filename")
     p.add_argument("company")
     p.add_argument("title")
     p.set_defaults(func=_cmd_resume_filename)
+
+    p = subparsers.add_parser("notion-database-schema", help="Print the Job Tracker database title + property schema")
+    p.set_defaults(func=_cmd_notion_database_schema)
+
+    p = subparsers.add_parser("notion-properties", help="Shape one job into Notion page properties")
+    p.add_argument("--job", required=True, help="JSON object for one shortlisted job (or failure)")
+    p.add_argument("--today", required=True, help="Run date, YYYY-MM-DD")
+    p.add_argument("--is-new", action="store_true", help="Set Date Shortlisted + Applied=false (first write of this job_id)")
+    p.set_defaults(func=_cmd_notion_properties)
+
+    p = subparsers.add_parser("load-notion-tracker", help="Read state/notion-tracker.json")
+    p.add_argument("path")
+    p.set_defaults(func=_cmd_load_notion_tracker)
+
+    p = subparsers.add_parser("save-notion-tracker", help="Persist the created Job Tracker database_id + data_source_id")
+    p.add_argument("path")
+    p.add_argument("--database-id", required=True)
+    p.add_argument("--data-source-id", required=True, help="collection://... id, needed to query/create pages")
+    p.set_defaults(func=_cmd_save_notion_tracker)
 
     return parser
 

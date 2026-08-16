@@ -65,3 +65,19 @@ def test_escapes_newlines_in_failure_error():
 
     assert "line one line two" in markdown
     assert "\nline two" not in markdown
+
+
+def test_renders_notion_sync_failures_section_when_present():
+    notion_failures = [{"title": "Staff Engineer", "company": "Initech", "error": "Notion API rate limited"}]
+
+    markdown = render_shortlist_markdown([], [], notion_failures)
+
+    assert "## Notion Sync Failures" in markdown
+    assert "Staff Engineer" in markdown
+    assert "Initech" in markdown
+    assert "Notion API rate limited" in markdown
+
+
+def test_no_notion_sync_failures_section_when_absent():
+    markdown = render_shortlist_markdown([], [])
+    assert "## Notion Sync Failures" not in markdown
