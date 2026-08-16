@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+
+# Runtime output — regenerated per run, contains tailored resumes (PII)
+runs/
+
+# Dedup log — mutable runtime state, not source
+state/seen-jobs.json

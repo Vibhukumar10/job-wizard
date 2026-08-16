@@ -1,0 +1,16 @@
+# job-hunt search configuration
+#
+# profiles: one entry per search you want run every day. Add as many as you like —
+# each is searched independently against LinkedIn, then merged before dedup/scoring.
+#
+# relevance_threshold: minimum score (1-10) a job must hit to be shortlisted.
+# max_shortlist: safety cap on shortlisted jobs per run, regardless of how many clear the threshold.
+
+relevance_threshold: 7.5
+max_shortlist: 50
+
+profiles:
+  - keywords: "Software Engineer"
+    location: "United States"
+    work_type: "remote"
+    experience_level: "mid-senior"
