@@ -16,6 +16,10 @@ Every day, `/job-hunt`:
    summary/skills/bullets and updated location, no fabricated experience.
 6. Writes a dated run folder with a `shortlist.md` and one tailored `.tex`
    file per job, ready to apply with.
+7. Pushes every shortlisted job into a Notion database (the "Job Tracker")
+   as a cumulative, cross-run view, upserted by `job_id`, with a hand-set
+   `Applied` checkbox the pipeline never reads back — see
+   [ADR 0001](docs/adr/0001-notion-job-tracker.md).
 
 See [`.scratch/job-hunt/spec.md`](.scratch/job-hunt/spec.md) for the full
 spec and design rationale.
@@ -26,12 +30,15 @@ spec and design rationale.
 config/search.yaml   Search profiles, relevance threshold, location preference
 resume/main.tex       Your base resume (version-controlled, user-maintained)
 resume/resume.cls      LaTeX class file for the resume
-pipeline/             Tested Python module: config/dedup/batching/rendering/naming
+pipeline/             Tested Python module: config/dedup/batching/rendering/naming/notion_tracker
 tests/                 pytest unit tests for pipeline/
 .claude/agents/        job-finder and resume-tailor subagent definitions
 .claude/skills/         /job-hunt orchestration skill
 state/seen-jobs.json    Dedup log across runs (gitignored, generated at runtime)
+state/notion-tracker.json  Created Notion database id (gitignored, generated at runtime)
 runs/<date>/            Daily output: shortlist.md + tailored resumes (gitignored)
+CONTEXT.md              Domain glossary (Shortlist, Job Tracker, Applied)
+docs/adr/                Architecture decision records
 ```
 
 ## Setup
@@ -49,6 +56,10 @@ Edit `config/search.yaml` to set your search profiles (keywords, location,
 work type, experience level), relevance threshold, shortlist cap, and
 optional ordered `location_preference` list.
 
+Authorize the Notion MCP connector (claude.ai connector settings) before
+running `/job-hunt` for real — the Job Tracker push (step 7 above) needs it,
+and creates its database on the first run under your "Upskill 2k26" page.
+
 ## Usage
 
 Run the full pipeline on demand from Claude Code:
@@ -59,8 +70,10 @@ Run the full pipeline on demand from Claude Code:
 
 This dispatches the `job-finder` subagent (search + relevance scoring) and
 then the `resume-tailor` subagent (one invocation per shortlisted job, in
-batches of 5) via the `/job-hunt` skill. Output lands in
-`runs/<YYYY-MM-DD>/shortlist.md` and `runs/<YYYY-MM-DD>/resumes/`.
+batches of 5) via the `/job-hunt` skill, then upserts every shortlisted job
+into the Notion Job Tracker. Output lands in
+`runs/<YYYY-MM-DD>/shortlist.md`, `runs/<YYYY-MM-DD>/resumes/`, and the
+Notion database itself.
 
 The pipeline can also be scheduled to run automatically once a day via
 Claude Code's `/schedule` cron skill (see
@@ -88,3 +101,8 @@ and are validated by running the pipeline for real, not by automated tests.
   [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - [`docs/agents/domain.md`](docs/agents/domain.md) — where domain context
   (`CONTEXT.md`, ADRs) lives for this repo.
+- [`CONTEXT.md`](CONTEXT.md) — domain glossary (`Shortlist`, `Job Tracker`,
+  `Applied`).
+- [`docs/adr/0001-notion-job-tracker.md`](docs/adr/0001-notion-job-tracker.md)
+  — why the Job Tracker is Notion, write-only, and pushed via the MCP
+  connector rather than a stored API token.
