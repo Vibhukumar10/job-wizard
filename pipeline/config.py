@@ -25,6 +25,7 @@ class SearchConfig:
     wider_net_companies: list[str] = field(default_factory=list)
     blacklist_companies: list[str] = field(default_factory=list)
     max_years_experience: float | None = None
+    min_shortlist: int = 0
 
 
 def _expand_wider_net_profiles(
@@ -89,6 +90,12 @@ def load_search_config(path: Path | str) -> SearchConfig:
 
     profiles = profiles + _expand_wider_net_profiles(wider_net_companies, profiles, location_preference)
 
+    min_shortlist = raw.get("min_shortlist", 0)
+    if min_shortlist > raw["max_shortlist"]:
+        raise ValueError(
+            f"Search config's min_shortlist ({min_shortlist}) cannot exceed max_shortlist ({raw['max_shortlist']})"
+        )
+
     return SearchConfig(
         relevance_threshold=raw["relevance_threshold"],
         max_shortlist=raw["max_shortlist"],
@@ -98,4 +105,5 @@ def load_search_config(path: Path | str) -> SearchConfig:
         wider_net_companies=wider_net_companies,
         blacklist_companies=blacklist_companies,
         max_years_experience=raw.get("max_years_experience"),
+        min_shortlist=min_shortlist,
     )

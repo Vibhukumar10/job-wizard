@@ -1,4 +1,5 @@
 import json
+from unittest.mock import MagicMock, patch
 
 from pipeline.cli import main
 
@@ -60,6 +61,21 @@ def test_batch_command(capsys):
     main(["batch", "--size", "5", "--jobs", jobs])
 
     assert json.loads(capsys.readouterr().out) == [[1, 2, 3, 4, 5], [6]]
+
+
+def test_select_shortlist_command_backfills_to_min(capsys):
+    jobs = json.dumps(
+        [
+            {"job_id": "1", "score": 8.0},
+            {"job_id": "2", "score": 5.0},
+        ]
+    )
+
+    main(["select-shortlist", "--relevance-threshold", "6.5", "--max-shortlist", "50", "--min-shortlist", "2", "--jobs", jobs])
+
+    result = json.loads(capsys.readouterr().out)
+    assert [j["job_id"] for j in result] == ["1", "2"]
+    assert result[1]["backfilled"] is True
 
 
 def test_render_shortlist_command(capsys):
@@ -136,6 +152,35 @@ def test_notion_properties_command_existing_job_omits_immutable_fields(capsys):
     parsed = json.loads(capsys.readouterr().out)
     assert "date:Date Shortlisted:start" not in parsed
     assert "Applied" not in parsed
+
+
+def test_compile_resume_pdf_command_reports_pdf_path(tmp_path, capsys):
+    tex_path = tmp_path / "acme-backend-engineer.tex"
+    tex_path.write_text("\\documentclass{resume}")
+
+    with patch("pipeline.pdf.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+        main(["compile-resume-pdf", "--tex", str(tex_path), "--cls-dir", str(tmp_path)])
+
+    assert json.loads(capsys.readouterr().out) == {"pdf_path": str(tex_path.with_suffix(".pdf"))}
+
+
+def test_check_resume_pdf_command(tmp_path, capsys):
+    pdf_path = tmp_path / "resume.pdf"
+    pdf_path.write_bytes(b"%PDF-fake")
+
+    class _FakePage:
+        def extract_text(self):
+            return "python aws docker"
+
+    class _FakeReader:
+        def __init__(self, path):
+            self.pages = [_FakePage()]
+
+    with patch("pipeline.pdf.PdfReader", _FakeReader):
+        main(["check-resume-pdf", "--pdf", str(pdf_path), "--keywords", json.dumps(["Python", "Kubernetes"])])
+
+    assert json.loads(capsys.readouterr().out) == {"pages": 1, "missing_keywords": ["Kubernetes"]}
 
 
 def test_save_and_load_notion_tracker_commands(tmp_path, capsys):

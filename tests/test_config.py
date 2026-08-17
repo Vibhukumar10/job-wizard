@@ -99,6 +99,32 @@ def test_max_years_experience_parsed_when_present(tmp_path):
     assert config.max_years_experience == 4
 
 
+def test_min_shortlist_defaults_to_zero_when_omitted(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML)
+
+    config = load_search_config(path)
+
+    assert config.min_shortlist == 0
+
+
+def test_min_shortlist_parsed_when_present(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + "\nmin_shortlist: 15\n")
+
+    config = load_search_config(path)
+
+    assert config.min_shortlist == 15
+
+
+def test_raises_when_min_shortlist_exceeds_max_shortlist(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + "\nmin_shortlist: 100\n")
+
+    with pytest.raises(ValueError, match="min_shortlist"):
+        load_search_config(path)
+
+
 def test_raises_on_missing_required_top_level_field(tmp_path):
     path = tmp_path / "search.yaml"
     path.write_text("max_shortlist: 50\nprofiles: []\n")

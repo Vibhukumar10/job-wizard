@@ -50,6 +50,18 @@ def test_job_without_error_gets_blank_notes():
     assert properties["Notes"] == ""
 
 
+def test_resume_pdf_included_when_file_id_present():
+    properties = build_notion_properties(_job(resume_pdf_file_id="file-abc123"), is_new=True, today="2026-08-16")
+
+    assert properties["Resume PDF"] == ["file-abc123"]
+
+
+def test_resume_pdf_omitted_when_no_file_id():
+    properties = build_notion_properties(_job(), is_new=True, today="2026-08-16")
+
+    assert "Resume PDF" not in properties
+
+
 def test_load_tracker_state_returns_empty_dict_when_file_missing(tmp_path):
     path = tmp_path / "notion-tracker.json"
     assert load_tracker_state(path) == {}
