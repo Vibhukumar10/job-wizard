@@ -114,6 +114,7 @@ def test_notion_database_schema_command(capsys):
     assert parsed["title"] == "Job Search Tracker"
     assert parsed["properties"]["Applied"] == {"checkbox": {}}
     assert parsed["properties"]["Job ID"] == {"rich_text": {}}
+    assert "Resume PDF" not in parsed["properties"]
 
 
 def test_notion_properties_command_new_job(capsys):

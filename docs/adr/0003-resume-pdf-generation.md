@@ -1,5 +1,7 @@
 # Resume PDF generation via deterministic compile + bounded LLM retry; Notion attachment via MCP file upload
 
+> **Partially superseded by [ADR 0007](0007-disable-notion-pdf-attachment.md):** the PDF generation/ATS-check rationale below still holds, but the Notion attachment flow it describes (the `Resume PDF` column, the three-call upload dance) was removed — Resume PDFs are no longer uploaded to the Job Tracker.
+
 The original spec explicitly deferred this: "Output: a `.tex` file only. No PDF compilation in this version." It also named ATS keyword matching as a goal ("relevant keywords... so that I score better against ATS keyword matching") without ever building a check for it — the only existing ATS behavior was `resume-tailor` inserting keywords honestly, with nothing verifying they survive into a submittable document. No LaTeX engine was installed locally.
 
 We added a new `resume-packager` subagent, dispatched per job immediately after `resume-tailor` succeeds, within the same batch wave. Compilation and validation are deterministic `pipeline/` functions the subagent shells out to via `pipeline/cli.py`; its only LLM judgment is a single bounded retry — editing the `.tex` (fixing a compile error, or trimming content that overran one page) and recompiling once — before giving up.

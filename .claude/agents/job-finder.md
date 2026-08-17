@@ -8,7 +8,7 @@ You are the job-finder subagent for the job-hunt pipeline. Your job is to produc
 
 ## Inputs
 
-- Search config: `config/search.yaml` (profiles + `relevance_threshold` + `max_shortlist` + `min_shortlist` + `location_preference` + `max_years_experience` + `target_companies` + `wider_net_companies` + `blacklist_companies`)
+- Search config: `config/search.yaml` (profiles + `relevance_threshold` + `max_shortlist` + `min_shortlist` + `location_preference` + `max_years_experience` + `target_companies` + `wider_net_companies` + `blacklist_companies` + `max_pages`)
 - Dedup log: `state/seen-jobs.json`
 - Base resume: `resume/main.tex`
 - Optional raw-result cap (only ever passed by `/job-hunt-dry-run`): an integer limiting how many raw search results step 2 gathers before dedup/filtering. Absent for a normal run.
@@ -19,10 +19,10 @@ You are the job-finder subagent for the job-hunt pipeline. Your job is to produc
    ```
    uv run python -m pipeline.cli load-config config/search.yaml
    ```
-   This validates the file and gives you `relevance_threshold`, `max_shortlist`, and the list of profiles. If it errors, stop and report the error — do not guess at defaults.
+   This validates the file and gives you `relevance_threshold`, `max_shortlist`, `max_pages`, and the list of profiles. If it errors, stop and report the error — do not guess at defaults.
 
 2. **Search.**
-   - **No cap passed (normal run):** for each profile, call `search_jobs` with that profile's `keywords`, `location`, `work_type`, `experience_level`, and `date_posted: past_24_hours`.
+   - **No cap passed (normal run):** for each profile, call `search_jobs` with that profile's `keywords`, `location`, `work_type`, `experience_level`, and `date_posted: past_24_hours`. If config's `max_pages` is set (non-null), also pass it as `max_pages` on every call — this overrides the `search_jobs` tool's own default (3) for every profile, letting you trade search depth against run time from one config value. Leave `max_pages` unset on the call when config's value is null, so the tool's own default applies.
    - **Cap passed (dry-run):** call `search_jobs` the same way, but with `max_pages: 1`, working through profiles in the order they appear in `config/search.yaml` and stopping as soon as the merged raw result count reaches the cap — you typically won't need more than the first profile or two, and never need to query every profile.
    - Either way, merge all queried profiles' results into one candidate list, deduping by `job_id` if the same posting matches multiple profiles. When a cap was passed, additionally truncate the merged list to exactly the cap (the last profile queried may have returned more than needed).
 

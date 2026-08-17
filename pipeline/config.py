@@ -26,6 +26,7 @@ class SearchConfig:
     blacklist_companies: list[str] = field(default_factory=list)
     max_years_experience: float | None = None
     min_shortlist: int = 0
+    max_pages: int | None = None
 
 
 def _expand_wider_net_profiles(
@@ -96,6 +97,10 @@ def load_search_config(path: Path | str) -> SearchConfig:
             f"Search config's min_shortlist ({min_shortlist}) cannot exceed max_shortlist ({raw['max_shortlist']})"
         )
 
+    max_pages = raw.get("max_pages")
+    if max_pages is not None and not (1 <= max_pages <= 10):
+        raise ValueError(f"Search config's max_pages ({max_pages}) must be between 1 and 10")
+
     return SearchConfig(
         relevance_threshold=raw["relevance_threshold"],
         max_shortlist=raw["max_shortlist"],
@@ -106,4 +111,5 @@ def load_search_config(path: Path | str) -> SearchConfig:
         blacklist_companies=blacklist_companies,
         max_years_experience=raw.get("max_years_experience"),
         min_shortlist=min_shortlist,
+        max_pages=max_pages,
     )
