@@ -38,6 +38,67 @@ def test_raises_on_missing_file(tmp_path):
         load_search_config(tmp_path / "does-not-exist.yaml")
 
 
+def test_company_fields_default_empty_when_omitted(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML)
+
+    config = load_search_config(path)
+
+    assert config.target_companies == []
+    assert config.wider_net_companies == []
+    assert config.blacklist_companies == []
+    assert config.max_years_experience is None
+
+
+def test_wider_net_companies_must_be_subset_of_target_companies(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(
+        VALID_YAML
+        + """
+target_companies:
+  - Google
+wider_net_companies:
+  - Google
+  - Amazon
+"""
+    )
+
+    with pytest.raises(ValueError, match="Amazon"):
+        load_search_config(path)
+
+
+def test_wider_net_companies_expand_into_extra_profiles(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(
+        VALID_YAML
+        + """
+location_preference:
+  - Noida
+target_companies:
+  - Google
+wider_net_companies:
+  - Google
+"""
+    )
+
+    config = load_search_config(path)
+
+    assert len(config.profiles) == 3  # 1 generic + (1 remote + 1 city) for Google
+    generated = config.profiles[1:]
+    assert {p.location for p in generated} == {"Remote", "Noida"}
+    assert all(p.keywords == "Backend Engineer Google" for p in generated)
+    assert all(p.experience_level == "mid-senior" for p in generated)
+
+
+def test_max_years_experience_parsed_when_present(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + "\nmax_years_experience: 4\n")
+
+    config = load_search_config(path)
+
+    assert config.max_years_experience == 4
+
+
 def test_raises_on_missing_required_top_level_field(tmp_path):
     path = tmp_path / "search.yaml"
     path.write_text("max_shortlist: 50\nprofiles: []\n")

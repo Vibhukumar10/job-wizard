@@ -10,14 +10,57 @@
 # Earlier cities score higher than later ones when two postings are otherwise similar.
 # Remote postings aren't ranked against this list — remote is a first-order preference
 # in its own right (see the "profiles" entry below), not a slot in the city ordering.
+#
+# max_years_experience: jobs whose core-role requirement exceeds this many years of
+# experience are rejected outright during scoring, regardless of relevance score.
+#
+# target_companies: every job at one of these companies gets a qualitative boost in
+# relevance scoring (see docs/adr/0002). Edit this list anytime.
+#
+# wider_net_companies: a subset of target_companies that additionally gets dedicated
+# search profiles (LinkedIn's search has no company filter, so a boost alone can't
+# surface postings the generic profiles above never fetched). Must be a subset of
+# target_companies. Keep this short — each entry adds several extra searches per run.
+#
+# blacklist_companies: jobs at these companies are dropped before scoring — never
+# shortlisted, tailored, or pushed to the Job Tracker.
 
 relevance_threshold: 7.5
 max_shortlist: 50
+max_years_experience: 4
 
 location_preference:
   - Noida
   - Bengaluru
   - Hyderabad
+
+target_companies:
+  - Microsoft
+  - Amazon
+  - Google
+  - eBay
+  - Adobe
+  - JP Morgan
+  - Arcesium
+  - Wells Fargo
+  - Cloudflare
+  - LSEG
+  - Apple
+  - Gitlab
+  - Akamai
+  - Cohesity
+  - Docusign
+  - PayU
+  - Visa
+  - Mastercard
+  - Stripe
+  - Nvidia
+  - Walmart
+  - Rippling
+
+wider_net_companies: []
+
+blacklist_companies: []
 
 profiles:
   - keywords: "Software Engineer"

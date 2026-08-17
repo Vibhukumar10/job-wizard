@@ -13,6 +13,7 @@ import sys
 from typing import Any
 
 from pipeline.batching import batch_jobs
+from pipeline.companies import filter_blacklisted_jobs
 from pipeline.config import load_search_config
 from pipeline.dedup import filter_unseen_jobs
 from pipeline.naming import resume_filename
@@ -53,6 +54,12 @@ def _cmd_filter_unseen(args: argparse.Namespace) -> None:
     seen_log = load_seen_jobs(args.path)
     jobs = _read_json_arg_or_stdin(args.jobs)
     print(json.dumps(filter_unseen_jobs(jobs, seen_log)))
+
+
+def _cmd_filter_blacklisted(args: argparse.Namespace) -> None:
+    jobs = _read_json_arg_or_stdin(args.jobs)
+    blacklist = json.loads(args.companies)
+    print(json.dumps(filter_blacklisted_jobs(jobs, blacklist)))
 
 
 def _cmd_batch(args: argparse.Namespace) -> None:
@@ -112,6 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("path")
     p.add_argument("--jobs", help="JSON list of jobs; reads stdin if omitted")
     p.set_defaults(func=_cmd_filter_unseen)
+
+    p = subparsers.add_parser("filter-blacklisted", help="Drop jobs whose company is on the blacklist")
+    p.add_argument("--companies", required=True, help="JSON list of blacklisted company names")
+    p.add_argument("--jobs", help="JSON list of jobs; reads stdin if omitted")
+    p.set_defaults(func=_cmd_filter_blacklisted)
 
     p = subparsers.add_parser("batch", help="Chunk jobs into concurrency-bounded batches")
     p.add_argument("--size", type=int, default=5)
