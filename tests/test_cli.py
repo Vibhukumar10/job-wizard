@@ -46,6 +46,14 @@ def test_append_seen_command_persists_to_disk(tmp_path, capsys):
     assert on_disk["1"]["title"] == "A"
 
 
+def test_filter_blacklisted_command(capsys):
+    jobs = json.dumps([{"job_id": "1", "company": "Acme Inc."}, {"job_id": "2", "company": "Wells Fargo"}])
+
+    main(["filter-blacklisted", "--companies", json.dumps(["Acme"]), "--jobs", jobs])
+
+    assert json.loads(capsys.readouterr().out) == [{"job_id": "2", "company": "Wells Fargo"}]
+
+
 def test_batch_command(capsys):
     jobs = json.dumps([1, 2, 3, 4, 5, 6])
 
