@@ -9,51 +9,62 @@ Ties together the job-finder and resume-tailor subagents into one dated run. Thi
 
 ## Steps
 
-1. **Determine the run date.** Use today's date, `YYYY-MM-DD`. Create `runs/<date>/` and `runs/<date>/resumes/` if they don't exist.
+1. **Verify the PDF toolchain is available.** Run `command -v pdflatex`. If it's not found, stop and tell the user clearly — installing it (`brew install --cask basictex`, a small pdfTeX distribution) is a one-time environment setup step, not something this run can work around. `pdflatex` specifically (not `xelatex`/`tectonic`) is required — `resume.cls` depends on the pdfTeX-only `glyphtounicode` mechanism for ATS-correct text extraction. This check happens once, up front, rather than letting every job independently discover the same missing binary.
 
-2. **Get the shortlist.** Dispatch the `job-finder` subagent (via the Agent tool) with no special input beyond its own instructions — it reads `config/search.yaml`, `state/seen-jobs.json`, and `resume/main.tex` itself. It returns a JSON list of shortlisted jobs (see `.claude/agents/job-finder.md` for the schema).
+2. **Determine the run date.** Use today's date, `YYYY-MM-DD`. Create `runs/<date>/` and `runs/<date>/resumes/` if they don't exist.
+
+3. **Get the shortlist.** Dispatch the `job-finder` subagent (via the Agent tool) with no special input beyond its own instructions — it reads `config/search.yaml`, `state/seen-jobs.json`, and `resume/main.tex` itself. It returns a JSON list of shortlisted jobs (see `.claude/agents/job-finder.md` for the schema).
 
    If `job-finder` reports that `resume/main.tex` is missing, stop and tell the user — the pipeline cannot proceed without it.
 
-   If the shortlist is empty, skip to step 5 with an empty jobs list (still write a `shortlist.md` — an empty day is a valid outcome, not an error).
+   If the shortlist is empty, skip to step 6 with an empty jobs list (still write a `shortlist.md` — an empty day is a valid outcome, not an error).
 
-3. **Tailor a resume per shortlisted job.**
+4. **Tailor a resume, then compile+validate its PDF, per shortlisted job.**
    - Chunk the shortlist into concurrency-bounded batches:
      ```
      uv run python -m pipeline.cli batch --size 5 --jobs '<json shortlist>'
      ```
-   - For each batch, dispatch one `resume-tailor` subagent invocation per job **concurrently** (multiple Agent tool calls in the same turn), passing that job's title/company/location/description and the run's output directory (`runs/<date>/resumes/`). Wait for the whole batch to finish before starting the next.
-   - If an invocation fails, retry it once (still within the same job, not the whole batch). If the retry also fails, record it as a failure (`title`, `company`, `error`) instead of a successful tailor — do not let one job's failure stop the rest of the batch or the run.
+   - For each batch, and for each job in it **concurrently** (multiple Agent tool calls in the same turn): dispatch `resume-tailor` (passing that job's title/company/location/description and `runs/<date>/resumes/`), and — only if it succeeds — immediately chain a `resume-packager` dispatch for the same job (passing the `resume_path` and `keywords` it returned), before moving on to the next job. Wait for the whole batch (both subagents, every job) to finish before starting the next batch.
+   - If `resume-tailor` fails, retry it once. If the retry also fails, record it as a failure (`title`, `company`, `error`) — `resume-packager` is never dispatched for that job.
+   - If `resume-packager` reports a `pdf_error`, that does *not* count as a tailoring failure — the job still has a working `.tex`. Record the `pdf_error` alongside the otherwise-successful tailor rather than treating the job as failed.
 
-4. **Track successes and failures** as you go: a list of successfully tailored jobs (job fields + the resume path returned by the subagent) and a list of failures (job fields + error).
+5. **Track successes and failures** as you go: a list of successfully tailored jobs (job fields, the `.tex` path, the `pdf_path` if `resume-packager` succeeded, and `pdf_error` if it didn't) and a list of failures (job fields + error, from `resume-tailor` failing twice).
 
-5. **Push every shortlisted job to the Notion Job Tracker.** Write-only, upserted by `job_id`, and never blocks the rest of the run — see [ADR 0001](../../../docs/adr/0001-notion-job-tracker.md) for why.
+   For each success, compute `resume_path` — the path to surface downstream (`shortlist.md`, Notion) — as the `pdf_path` when present, falling back to the `.tex` path on `pdf_error`.
+
+6. **Push every shortlisted job to the Notion Job Tracker.** Write-only, upserted by `job_id`, and never blocks the rest of the run — see [ADR 0001](../../../docs/adr/0001-notion-job-tracker.md) for why.
    - Load tracker state: `uv run python -m pipeline.cli load-notion-tracker state/notion-tracker.json`.
    - If it returns `{}`, no database exists yet — create one:
      - Get the title + property schema: `uv run python -m pipeline.cli notion-database-schema`.
      - Create a database with that title and schema, under the "Upskill 2k26" page, via `mcp__claude_ai_Notion__notion-create-database`. Its result includes a `<data-source url="collection://...">` — that id (not the database page id alone) is what you'll need to query and create pages against.
      - Persist both: `uv run python -m pipeline.cli save-notion-tracker state/notion-tracker.json --database-id '<database url/id>' --data-source-id '<collection://... id>'`.
+   - If it returns an existing state (database already exists — this is the common case), check whether its schema already has the `Resume PDF` column: fetch the data source via `mcp__claude_ai_Notion__notion-fetch` with the saved `data_source_id`. If `Resume PDF` isn't present, add it via `mcp__claude_ai_Notion__notion-update-data-source` (`statements: "ADD COLUMN \"Resume PDF\" FILES"`) — this is what brings an already-existing database (created before this feature) up to date, once per run at most.
    - For every job in this run's combined successes + failures list:
      - Query via `mcp__claude_ai_Notion__notion-query-data-sources` (SQL mode, against the saved `data_source_id`) for an existing row where `"Job ID"` equals this job's `job_id`.
-     - Shape properties: `uv run python -m pipeline.cli notion-properties --job '<json job>' --today <date> [--is-new if no page was found]`. For a failed-tailor job, include its `error` field in the job JSON — it lands in the `Notes` property.
+     - If the job has a `pdf_path` (a compiled PDF exists), upload it in three steps — a fresh upload's id is *not* directly usable in a Files property, despite what it looks like from the upload tool alone:
+       1. Call `mcp__claude_ai_Notion__notion-create-file-upload` with the PDF's filename, then POST the local file to the returned `upload_url` with the returned `upload_headers` (via `curl -F "file=@<pdf_path>" -H '<header>: <value>' ... <upload_url>`).
+       2. Attach it to a page's content once, to mint a real reference: create the job's page (via `mcp__claude_ai_Notion__notion-create-pages`) with `content` set to `<pdf src="file-upload://<file_upload_id>"></pdf>`, properties set as normal but *without* `Resume PDF` yet.
+       3. Fetch that page (`mcp__claude_ai_Notion__notion-fetch`) — its content now shows an `attachment:<uuid>:<filename>` reference. Use that exact string (not the original `file_upload_id`) as the array value for the `Resume PDF` property in a follow-up `mcp__claude_ai_Notion__notion-update-page` call.
+       This means PDF-bearing jobs go through create-then-update rather than a single create-with-all-properties call; jobs without a `pdf_path` still create in one call as before.
+     - Shape properties: `uv run python -m pipeline.cli notion-properties --job '<json job>' --today <date> [--is-new if no page was found]`. For a failed-tailor job, include its `error` field in the job JSON — it lands in the `Notes` property. For a `pdf_error` job (still a successful tailor, just no PDF), pass the `pdf_error` text as `error` too, so `Notes` explains why `Resume PDF` is empty for that row.
      - Create a page (none found, via `mcp__claude_ai_Notion__notion-create-pages` with `parent: {data_source_id: ...}`) or update the existing one (found, via `mcp__claude_ai_Notion__notion-update-page`) with those properties.
      - If the call fails, retry once. If the retry also fails, record it as a Notion sync failure (`title`, `company`, `error`) instead — one job's Notion failure never stops the rest of the batch, and never blocks writing `shortlist.md` or updating `seen-jobs.json`.
 
-6. **Write `shortlist.md`.**
+7. **Write `shortlist.md`.**
    ```
    uv run python -m pipeline.cli render-shortlist --jobs '<json successes>' --failures '<json failures>' --notion-failures '<json notion sync failures>' > runs/<date>/shortlist.md
    ```
-   `successes` needs `title`, `company`, `location`, `score`, `apply_link`, `resume_path` per job — build this from the job-finder output plus each job's tailored-resume path.
+   `successes` needs `title`, `company`, `location`, `score`, `apply_link`, `resume_path`, `backfilled` per job — the PDF-preferring path computed in step 5, plus the `backfilled` flag `job-finder` returned (so a min_shortlist-backfilled job is visibly marked, not indistinguishable from one that cleared the threshold organically).
 
-7. **Update the seen-jobs log** with every job that was shortlisted this run (successes and failures alike — a job that failed tailoring twice was still seen and scored, so it shouldn't resurface tomorrow as "new"):
+8. **Update the seen-jobs log** with every job that was shortlisted this run (successes and failures alike — a job that failed tailoring twice was still seen and scored, so it shouldn't resurface tomorrow as "new"):
    ```
    uv run python -m pipeline.cli append-seen state/seen-jobs.json --jobs '<json list of {job_id,title,company} for every shortlisted job>'
    ```
 
-8. **Report back to the user**: how many jobs were found, shortlisted, tailored successfully, tailored-and-failed, and Notion-sync-failed, plus the path to `runs/<date>/shortlist.md`.
+9. **Report back to the user**: how many jobs were found, shortlisted (and how many of those were `min_shortlist` backfill vs. organically above `relevance_threshold`), tailored successfully, tailored-and-failed, PDF-generation-failed (`pdf_error`, still counted as tailored), and Notion-sync-failed, plus the path to `runs/<date>/shortlist.md`.
 
 ## Notes
 
-- Steps 2 and 3 are the only LLM-judgment (agentic) parts of this pipeline — everything else routes through the tested `pipeline` module via `uv run python -m pipeline.cli ...` rather than being reimplemented inline. If you find yourself hand-writing dedup, batching, or markdown-rendering logic here, stop — that logic already exists in `pipeline/`.
-- Step 5's Notion calls involve tool use too, but no LLM judgment — data is shaped by `pipeline.cli notion-properties`, and the step just decides create-vs-update and calls the connector. It's deliberately kept outside `pipeline/` rather than a stored-API-token approach, because it needs the connector's already-authorized access — see ADR 0001.
-- This skill is invoked both manually (`/job-hunt`) and by the daily 7am schedule — behavior is identical either way, there is no schedule-only code path.
+- Steps 3 and 4 (both subagents) are the only LLM-judgment (agentic) parts of this pipeline — everything else routes through the tested `pipeline` module via `uv run python -m pipeline.cli ...` rather than being reimplemented inline. If you find yourself hand-writing dedup, batching, PDF compilation, or markdown-rendering logic here, stop — that logic already exists in `pipeline/`.
+- Step 6's Notion calls involve tool use too, but no LLM judgment — data is shaped by `pipeline.cli notion-properties`, and the step just decides create-vs-update and calls the connector. It's deliberately kept outside `pipeline/` rather than a stored-API-token approach, because it needs the connector's already-authorized access — see ADR 0001. The file-upload sub-step is the same kind of tool-use-without-judgment: `pipeline/` shapes properties, the connector does the upload.
+- This skill is invoked both manually (`/job-hunt`) and by the daily 7am schedule — behavior is identical either way, there is no schedule-only code path. Step 1's `pdflatex` check matters most here: an unattended run should fail loudly on a missing dependency, not silently skip PDF generation for every job.

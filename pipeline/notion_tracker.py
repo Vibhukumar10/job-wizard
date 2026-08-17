@@ -18,6 +18,7 @@ DATABASE_SCHEMA: dict[str, Any] = {
     "Date Shortlisted": {"date": {}},
     "Applied": {"checkbox": {}},
     "Notes": {"rich_text": {}},
+    "Resume PDF": {"files": {}},
 }
 
 
@@ -33,6 +34,10 @@ def build_notion_properties(job: dict[str, Any], *, is_new: bool, today: str) ->
     Date Shortlisted and a fresh Applied=false. On update (is_new=False),
     only the mutable fields are touched — Date Shortlisted and Applied are
     left alone so a re-upsert never clobbers the user's hand-set status.
+
+    "Resume PDF" is only set when the job carries a resume_pdf_file_id (the
+    id returned by uploading the compiled PDF via the Notion MCP connector's
+    file-upload flow) — a job with a pdf_error has no PDF to attach.
     """
     properties: dict[str, Any] = {
         "Title": job["title"],
@@ -43,6 +48,8 @@ def build_notion_properties(job: dict[str, Any], *, is_new: bool, today: str) ->
         "Job ID": job["job_id"],
         "Notes": job.get("error", ""),
     }
+    if job.get("resume_pdf_file_id"):
+        properties["Resume PDF"] = [job["resume_pdf_file_id"]]
     if is_new:
         properties["date:Date Shortlisted:start"] = today
         properties["Applied"] = "__NO__"

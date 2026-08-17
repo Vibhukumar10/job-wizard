@@ -24,8 +24,9 @@ from pipeline.notion_tracker import (
     load_tracker_state,
     save_tracker_state,
 )
+from pipeline.pdf import check_resume_pdf, compile_resume_pdf
 from pipeline.seen_jobs import append_seen_jobs, load_seen_jobs
-from pipeline.shortlist import render_shortlist_markdown
+from pipeline.shortlist import render_shortlist_markdown, select_shortlist
 
 
 def _read_json_arg_or_stdin(value: str | None) -> Any:
@@ -67,6 +68,17 @@ def _cmd_batch(args: argparse.Namespace) -> None:
     print(json.dumps(batch_jobs(jobs, size=args.size)))
 
 
+def _cmd_select_shortlist(args: argparse.Namespace) -> None:
+    scored_jobs = _read_json_arg_or_stdin(args.jobs)
+    result = select_shortlist(
+        scored_jobs,
+        relevance_threshold=args.relevance_threshold,
+        max_shortlist=args.max_shortlist,
+        min_shortlist=args.min_shortlist,
+    )
+    print(json.dumps(result))
+
+
 def _cmd_render_shortlist(args: argparse.Namespace) -> None:
     jobs = json.loads(args.jobs) if args.jobs else []
     failures = json.loads(args.failures) if args.failures else []
@@ -96,6 +108,16 @@ def _cmd_save_notion_tracker(args: argparse.Namespace) -> None:
         {"database_id": args.database_id, "data_source_id": args.data_source_id}, args.path
     )
     print(json.dumps(state))
+
+
+def _cmd_compile_resume_pdf(args: argparse.Namespace) -> None:
+    pdf_path = compile_resume_pdf(args.tex, args.cls_dir)
+    print(json.dumps({"pdf_path": str(pdf_path)}))
+
+
+def _cmd_check_resume_pdf(args: argparse.Namespace) -> None:
+    keywords = json.loads(args.keywords)
+    print(json.dumps(check_resume_pdf(args.pdf, keywords)))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -130,6 +152,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--jobs", help="JSON list of jobs; reads stdin if omitted")
     p.set_defaults(func=_cmd_batch)
 
+    p = subparsers.add_parser("select-shortlist", help="Pick the final shortlist from every scored candidate, backfilling to min_shortlist if needed")
+    p.add_argument("--jobs", help="JSON list of stage-2-scored jobs (each with a numeric 'score'); reads stdin if omitted")
+    p.add_argument("--relevance-threshold", type=float, required=True)
+    p.add_argument("--max-shortlist", type=int, required=True)
+    p.add_argument("--min-shortlist", type=int, default=0)
+    p.set_defaults(func=_cmd_select_shortlist)
+
     p = subparsers.add_parser("render-shortlist", help="Render shortlist.md content")
     p.add_argument("--jobs", help="JSON list of shortlisted jobs", default="[]")
     p.add_argument("--failures", help="JSON list of failures", default="[]")
@@ -159,6 +188,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--database-id", required=True)
     p.add_argument("--data-source-id", required=True, help="collection://... id, needed to query/create pages")
     p.set_defaults(func=_cmd_save_notion_tracker)
+
+    p = subparsers.add_parser("compile-resume-pdf", help="Compile a tailored .tex resume to PDF via pdflatex")
+    p.add_argument("--tex", required=True, help="Path to the tailored .tex file")
+    p.add_argument("--cls-dir", default="resume", help="Directory containing resume.cls (default: resume)")
+    p.set_defaults(func=_cmd_compile_resume_pdf)
+
+    p = subparsers.add_parser("check-resume-pdf", help="Check a compiled resume PDF's page count and keyword coverage")
+    p.add_argument("--pdf", required=True, help="Path to the compiled PDF")
+    p.add_argument("--keywords", required=True, help="JSON list of keywords that must appear in the extracted text")
+    p.set_defaults(func=_cmd_check_resume_pdf)
 
     return parser
 

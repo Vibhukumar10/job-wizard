@@ -6,6 +6,12 @@
 # relevance_threshold: minimum score (1-10) a job must hit to be shortlisted.
 # max_shortlist: safety cap on shortlisted jobs per run, regardless of how many clear the threshold.
 #
+# min_shortlist: if fewer than this many jobs clear relevance_threshold, the next
+# highest-scoring below-threshold jobs are backfilled in (still real stage-2
+# candidates that passed the experience cap and blacklist) until min_shortlist is
+# reached or candidates run out. Backfilled jobs are marked in shortlist.md so
+# they're never mistaken for ones that cleared the bar organically. See docs/adr/0004.
+#
 # location_preference: soft signal for relevance scoring only, not a search filter.
 # Earlier cities score higher than later ones when two postings are otherwise similar.
 # Remote postings aren't ranked against this list — remote is a first-order preference
@@ -25,8 +31,9 @@
 # blacklist_companies: jobs at these companies are dropped before scoring — never
 # shortlisted, tailored, or pushed to the Job Tracker.
 
-relevance_threshold: 7.5
+relevance_threshold: 6.0
 max_shortlist: 50
+min_shortlist: 15
 max_years_experience: 4
 
 location_preference:
@@ -35,32 +42,71 @@ location_preference:
   - Hyderabad
 
 target_companies:
+  - Adobe
   - Microsoft
   - Amazon
   - Google
   - eBay
-  - Adobe
+  - Salesforce
   - JP Morgan
-  - Arcesium
-  - Wells Fargo
-  - Cloudflare
-  - LSEG
-  - Apple
-  - Gitlab
-  - Akamai
-  - Cohesity
-  - Docusign
-  - PayU
   - Visa
   - Mastercard
-  - Stripe
-  - Nvidia
-  - Walmart
+  - Arcesium
+  - Wells Fargo
+  - Twilio
+  - LSEG
+  - ServiceNow
+  - Apple
+  - Gitlab
+  - Atlassian
+  - Akamai
   - Rippling
+  - Cohesity
+  - Cloudflare
+  - Walmart
+  - Nvidia
+  - PayU
+  - Stripe
+  - Netflix
+  - VMware
+  - Slack
+  - Docusign
+  - Databricks
+  - MongoDB
+  - Zoom
+  - HashiCorp
+  - Shopify
+  - Snowflake
+  - Palantir
 
-wider_net_companies: []
+wider_net_companies:
+  - Cloudflare
+  - Walmart
+  - Nvidia
+  - PayU
+  - Stripe
+  - Netflix
+  - VMware
+  - Slack
+  - Docusign
+  - Databricks
+  - MongoDB
+  - Zoom
+  - HashiCorp
+  - Shopify
+  - Snowflake
+  - Palantir
 
-blacklist_companies: []
+blacklist_companies:
+  - Oracle
+  - TCS
+  - Infosys
+  - Wipro
+  - HCL
+  - Capgemini
+  - Tech Mahindra
+  - Cognizant
+  - Accenture
 
 profiles:
   - keywords: "Software Engineer"
