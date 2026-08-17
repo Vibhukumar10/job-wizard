@@ -25,7 +25,7 @@ A Target Company the user has additionally opted into dedicated search profiles 
 _Avoid_: Priority search company
 
 **Resume PDF**:
-The compiled, one-page PDF rendering of a tailored resume, produced by `resume-packager` from a `resume-tailor` `.tex` output. Lives alongside the `.tex` in `runs/<date>/resumes/`, and — when successfully generated — is attached to the corresponding Job Tracker row.
+The compiled, one-page PDF rendering of a tailored resume, produced by `resume-packager` from a `resume-tailor` `.tex` output. Lives alongside the `.tex` in `runs/<date>/resumes/`, and — when successfully generated — is the path `shortlist.md`'s Resume column points to. Never uploaded to the Job Tracker; the Tracker holds job data only.
 _Avoid_: PDF resume, compiled resume
 
 **ATS Check**:
@@ -33,7 +33,7 @@ The deterministic pass/fail run against a Resume PDF: every keyword `resume-tail
 _Avoid_: ATS score, ATS pass
 
 **PDF Error**:
-The failure state recorded on a shortlisted job when `resume-packager` can't produce a passing Resume PDF, even after its one retry. The job stays in the run — the `.tex` resume remains the fallback artifact — but no PDF is generated or attached to the Job Tracker.
+The failure state recorded on a shortlisted job when `resume-packager` can't produce a passing Resume PDF, even after its one retry. The job stays in the run — the `.tex` resume remains the fallback artifact — but no PDF is generated.
 _Avoid_: PDF failure, packaging error
 
 **Backfilled Job**:

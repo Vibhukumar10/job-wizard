@@ -125,6 +125,33 @@ def test_raises_when_min_shortlist_exceeds_max_shortlist(tmp_path):
         load_search_config(path)
 
 
+def test_max_pages_defaults_to_none_when_omitted(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML)
+
+    config = load_search_config(path)
+
+    assert config.max_pages is None
+
+
+def test_max_pages_parsed_when_present(tmp_path):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + "\nmax_pages: 5\n")
+
+    config = load_search_config(path)
+
+    assert config.max_pages == 5
+
+
+@pytest.mark.parametrize("value", [0, 11, -1])
+def test_raises_when_max_pages_out_of_range(tmp_path, value):
+    path = tmp_path / "search.yaml"
+    path.write_text(VALID_YAML + f"\nmax_pages: {value}\n")
+
+    with pytest.raises(ValueError, match="max_pages"):
+        load_search_config(path)
+
+
 def test_raises_on_missing_required_top_level_field(tmp_path):
     path = tmp_path / "search.yaml"
     path.write_text("max_shortlist: 50\nprofiles: []\n")

@@ -20,6 +20,11 @@
 # max_years_experience: jobs whose core-role requirement exceeds this many years of
 # experience are rejected outright during scoring, regardless of relevance score.
 #
+# max_pages: overrides search_jobs's own default (3) for every profile on a normal
+# run, applied uniformly across all profiles including wider_net-expanded ones.
+# Must be between 1 and 10 (the tool's own cap). Omit to use the tool's default.
+# Dry runs (/job-hunt-dry-run) always use max_pages: 1 regardless of this setting.
+#
 # target_companies: every job at one of these companies gets a qualitative boost in
 # relevance scoring (see docs/adr/0002). Edit this list anytime.
 #
@@ -32,6 +37,7 @@
 # shortlisted, tailored, or pushed to the Job Tracker.
 
 relevance_threshold: 6.0
+max_pages: 5
 max_shortlist: 50
 min_shortlist: 15
 max_years_experience: 4
@@ -48,6 +54,7 @@ target_companies:
   - Google
   - eBay
   - Salesforce
+  - Nutanix
   - JP Morgan
   - Visa
   - Mastercard
@@ -65,7 +72,6 @@ target_companies:
   - Cloudflare
   - Walmart
   - Nvidia
-  - PayU
   - Stripe
   - Netflix
   - VMware
@@ -75,27 +81,14 @@ target_companies:
   - MongoDB
   - Zoom
   - HashiCorp
-  - Shopify
-  - Snowflake
-  - Palantir
+
 
 wider_net_companies:
-  - Cloudflare
-  - Walmart
-  - Nvidia
-  - PayU
-  - Stripe
-  - Netflix
-  - VMware
-  - Slack
-  - Docusign
-  - Databricks
-  - MongoDB
-  - Zoom
-  - HashiCorp
-  - Shopify
-  - Snowflake
-  - Palantir
+  - Adobe
+  - Amazon
+  - Microsoft
+  - eBay
+  - Google
 
 blacklist_companies:
   - Oracle
@@ -111,17 +104,17 @@ blacklist_companies:
 profiles:
   - keywords: "Software Engineer"
     location: "India"
-    work_type: "remote"
+    work_type: "on_site,hybrid,remote"
     experience_level: "mid_senior"
-  - keywords: "Software Engineer"
-    location: "Noida"
-    work_type: "on_site,hybrid"
-    experience_level: "mid_senior"
-  - keywords: "Software Engineer"
-    location: "Bengaluru"
-    work_type: "on_site,hybrid"
-    experience_level: "mid_senior"
-  - keywords: "Software Engineer"
-    location: "Hyderabad"
-    work_type: "on_site,hybrid"
-    experience_level: "mid_senior"
+  # - keywords: "Software Engineer"
+  #   location: "India"
+  #   work_type: "on_site,hybrid,remote"
+  #   experience_level: "mid_senior"
+  # - keywords: "Software Engineer"
+  #   location: "Bengaluru"
+  #   work_type: "on_site,hybrid,remote"
+  #   experience_level: "mid_senior"
+  # - keywords: "Software Engineer"
+  #   location: "Hyderabad"
+  #   work_type: "on_site,hybrid,remote"
+  #   experience_level: "mid_senior"
