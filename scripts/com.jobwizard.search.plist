@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent for the job-hunt search phase. Install with scripts/install-launchagent.sh.
+
+  StartCalendarInterval, not StartInterval: only the former catches up after
+  sleep. man launchd.plist is explicit that StartInterval "will be missed due to
+  shortcomings in kqueue(3)" if the system is asleep at firing time, whereas
+  StartCalendarInterval starts the job on the next wake and coalesces multiple
+  missed firings into one.
+
+  RunAtLoad is deliberately false: loading the agent (at login, or when
+  installing it) should not kick off a 14-minute LinkedIn search.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jobwizard.search</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__REPO__/scripts/run-search-phase.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO__</string>
+
+    <key>StandardOutPath</key>
+    <string>__REPO__/state/logs/launchagent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO__/state/logs/launchagent.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/TeX/texbin</string>
+    </dict>
+</dict>
+</plist>

@@ -1,7 +1,7 @@
 # Design the search/tailor handoff contract
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: —
 Map: ../map.md
 
@@ -43,3 +43,79 @@ requirements to the contract:
   "never started today."
 - A **date-stamped guard file** caps the search phase at one run per calendar day.
   Decide whether that's a separate file or a field inside `jobs.json`.
+
+## Answer
+
+**Two files, one writer each, addressed by `job_id`.**
+
+### The contract
+
+`runs/<date>/jobs.json` — written by the **search phase**, never rewritten by anything.
+Holds the run date plus every shortlisted job in `job-finder`'s existing output schema
+(`job_id`, `title`, `company`, `location`, `score`, `apply_link`, `description`,
+`backfilled`).
+
+`runs/<date>/tailored.json` — written by the **tailor phase**. Maps `job_id` to that
+job's outcome: `tex_path`, `pdf_path`, the keywords inserted, and any error.
+
+Nothing is shared mutable state, which is the whole point: running the tailor phase
+twice, or running two of them concurrently, cannot corrupt the search phase's output.
+Tailoring progress is never inferred from files lying around in `resumes/`.
+
+### Complete vs in-flight — one mechanism, not two
+
+The search phase writes `jobs.json.tmp` and **atomically renames** it on completion. So:
+
+| On disk | Means |
+| --- | --- |
+| `jobs.json` | Search finished; safe to tailor |
+| only `jobs.json.tmp` | Search in flight; tailor blocks and says so |
+| neither | Search never ran today |
+
+That same existence check is the **once-per-day guard** ticket 07 asked for — no
+separate guard file. A `.tmp` older than ~45 minutes is a dead run rather than an
+in-flight one, and should be treated as "never ran" so a crashed search doesn't wedge
+the pipeline permanently.
+
+### Addressing
+
+`job_id` is the contract — it's already the dedup key in `state/seen-jobs.json` and
+already a Notion column, so nothing new is invented. Because `4444888908` is unusable by
+hand, `/job-hunt-tailor` also accepts a company or title fragment and resolves it against
+`jobs.json`, erroring on an ambiguous match rather than guessing.
+
+Run selection: **today by default**, `--date` to override, and a bare `job_id` searches
+backwards up to **7 days**. That 7 is deliberately the same number as the retention
+window in [Redefine "seen"](04-seen-semantics-and-retention.md) — one concept, not two
+independent knobs that can drift apart.
+
+### `shortlist.md` — the one thing that breaks today
+
+`render_shortlist_markdown` (`pipeline/shortlist.py`) indexes `job["resume_path"]`
+directly, so it raises `KeyError` on a job that hasn't been tailored. Under the split the
+search phase writes `shortlist.md` before any resume exists.
+
+Decision: the **search phase writes it with `resume_path` as `—`**, and the **tailor
+phase re-renders the whole file** from `jobs.json` + `tailored.json`. The code change is
+one line — `job.get("resume_path", "—")` — plus a test.
+
+This is a genuine improvement rather than just damage control: `shortlist.md` becomes
+useful the moment the search finishes, so you can read the day's jobs and pick which to
+tailor before anything has been tailored.
+
+### Failure modes
+
+- **Search never ran today** — say so plainly and offer to run it, rather than erroring
+  on a missing file.
+- **Search ran, shortlisted nothing** — a valid outcome, not an error. Empty
+  `shortlist.md`, matching what `/job-hunt` step 3 already does today.
+- **A `.tex` already exists for the requested job** — skip by default, `--force` to
+  redo. Protects the lazy path from silently re-burning an agent on work already done.
+
+### Build items this settles
+
+1. `render_shortlist_markdown` tolerates a missing `resume_path`.
+2. Search phase writes `jobs.json` via tmp-and-rename, and `shortlist.md` with `—`.
+3. Tailor phase writes `tailored.json` and re-renders `shortlist.md`.
+4. `job_id` resolution helper (exact, then unambiguous fragment match), probably
+   deterministic enough to live in `pipeline/` with tests.

@@ -25,6 +25,18 @@ from pipeline.notion_tracker import (
     save_tracker_state,
 )
 from pipeline.pdf import check_resume_pdf, compile_resume_pdf
+from pipeline.run_store import (
+    AmbiguousJobQueryError,
+    age_out_warning,
+    pending_jobs,
+    read_jobs,
+    read_tailored,
+    record_tailored,
+    resolve_job,
+    run_status,
+    select_eager,
+    write_jobs,
+)
 from pipeline.seen_jobs import append_seen_jobs, load_seen_jobs
 from pipeline.shortlist import render_shortlist_markdown, select_shortlist
 
@@ -120,6 +132,43 @@ def _cmd_check_resume_pdf(args: argparse.Namespace) -> None:
     print(json.dumps(check_resume_pdf(args.pdf, keywords)))
 
 
+def _cmd_write_jobs(args: argparse.Namespace) -> None:
+    jobs = _read_json_arg_or_stdin(args.jobs)
+    path = write_jobs(args.run_dir, jobs, run_date=args.run_date)
+    print(json.dumps({"jobs_path": str(path), "count": len(jobs)}))
+
+
+def _cmd_run_status(args: argparse.Namespace) -> None:
+    print(json.dumps({"status": run_status(args.run_dir)}))
+
+
+def _cmd_read_jobs(args: argparse.Namespace) -> None:
+    print(json.dumps(read_jobs(args.run_dir)))
+
+
+def _cmd_select_eager(args: argparse.Namespace) -> None:
+    jobs = _read_json_arg_or_stdin(args.jobs)
+    print(json.dumps(select_eager(jobs, args.count)))
+
+
+def _cmd_resolve_job(args: argparse.Namespace) -> None:
+    print(json.dumps(resolve_job(read_jobs(args.run_dir), args.query)))
+
+
+def _cmd_record_tailored(args: argparse.Namespace) -> None:
+    outcome = json.loads(args.outcome)
+    print(json.dumps(record_tailored(args.run_dir, args.job_id, outcome)))
+
+
+def _cmd_read_tailored(args: argparse.Namespace) -> None:
+    print(json.dumps(read_tailored(args.run_dir)))
+
+
+def _cmd_pending(args: argparse.Namespace) -> None:
+    pending = pending_jobs(args.runs_root, today=args.today)
+    print(json.dumps({"pending": pending, "warning": age_out_warning(pending)}))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pipeline.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -199,13 +248,55 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--keywords", required=True, help="JSON list of keywords that must appear in the extracted text")
     p.set_defaults(func=_cmd_check_resume_pdf)
 
+    p = subparsers.add_parser("write-jobs", help="Write a run's jobs.json atomically (search phase)")
+    p.add_argument("run_dir")
+    p.add_argument("--run-date", required=True, help="Run date, YYYY-MM-DD")
+    p.add_argument("--jobs", help="JSON list of shortlisted jobs; reads stdin if omitted")
+    p.set_defaults(func=_cmd_write_jobs)
+
+    p = subparsers.add_parser("run-status", help="Is a run complete, in_flight, or missing?")
+    p.add_argument("run_dir")
+    p.set_defaults(func=_cmd_run_status)
+
+    p = subparsers.add_parser("read-jobs", help="Read a completed run's shortlisted jobs")
+    p.add_argument("run_dir")
+    p.set_defaults(func=_cmd_read_jobs)
+
+    p = subparsers.add_parser("select-eager", help="Top N jobs by score — the eagerly tailored set")
+    p.add_argument("--count", type=int, required=True)
+    p.add_argument("--jobs", help="JSON list of jobs; reads stdin if omitted")
+    p.set_defaults(func=_cmd_select_eager)
+
+    p = subparsers.add_parser("resolve-job", help="Find one job by job_id or company/title fragment")
+    p.add_argument("run_dir")
+    p.add_argument("query")
+    p.set_defaults(func=_cmd_resolve_job)
+
+    p = subparsers.add_parser("record-tailored", help="Record one job's tailoring outcome (tailor phase)")
+    p.add_argument("run_dir")
+    p.add_argument("job_id")
+    p.add_argument("--outcome", required=True, help="JSON object: tex_path, pdf_path, keywords, error")
+    p.set_defaults(func=_cmd_record_tailored)
+
+    p = subparsers.add_parser("read-tailored", help="Read this run's tailoring outcomes by job_id")
+    p.add_argument("run_dir")
+    p.set_defaults(func=_cmd_read_tailored)
+
+    p = subparsers.add_parser("pending", help="Shortlisted jobs inside the window with no resume yet")
+    p.add_argument("runs_root", nargs="?", default="runs")
+    p.add_argument("--today", help="Override today's date, YYYY-MM-DD")
+    p.set_defaults(func=_cmd_pending)
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    except AmbiguousJobQueryError as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":

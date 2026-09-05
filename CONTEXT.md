@@ -25,15 +25,15 @@ A Target Company the user has additionally opted into dedicated search profiles 
 _Avoid_: Priority search company
 
 **Resume PDF**:
-The compiled, one-page PDF rendering of a tailored resume, produced by `resume-packager` from a `resume-tailor` `.tex` output. Lives alongside the `.tex` in `runs/<date>/resumes/`, and — when successfully generated — is the path `shortlist.md`'s Resume column points to. Never uploaded to the Job Tracker; the Tracker holds job data only.
+The compiled, one-page PDF rendering of a tailored resume, produced by `resume-tailor` alongside the `.tex` it writes. Lives alongside the `.tex` in `runs/<date>/resumes/`, and — when successfully generated — is the path `shortlist.md`'s Resume column points to. Never uploaded to the Job Tracker; the Tracker holds job data only.
 _Avoid_: PDF resume, compiled resume
 
 **ATS Check**:
-The deterministic pass/fail run against a Resume PDF: every keyword `resume-tailor` honestly inserted must survive text extraction from the compiled PDF. Distinct from, but gates a Resume PDF equally alongside, the one-page limit.
+The deterministic pass/fail run against a Resume PDF: every keyword `resume-tailor` honestly inserted must survive text extraction from the compiled PDF. Run by the Tailor Phase itself, outside any agent, so the agent that inserted the keywords never grades whether they survived. Distinct from, but gates a Resume PDF equally alongside, the one-page limit.
 _Avoid_: ATS score, ATS pass
 
 **PDF Error**:
-The failure state recorded on a shortlisted job when `resume-packager` can't produce a passing Resume PDF, even after its one retry. The job stays in the run — the `.tex` resume remains the fallback artifact — but no PDF is generated.
+The failure state recorded on a shortlisted job when the tailor phase can't produce a passing one-page, ATS-clean Resume PDF after its bounded retries. The job stays in the run — the `.tex` resume remains the fallback artifact — but no usable PDF is produced. Not a failed job: a failed job has no tailored resume at all.
 _Avoid_: PDF failure, packaging error
 
 **Backfilled Job**:
@@ -45,9 +45,25 @@ A company on the user's exclusion list. A job at a blacklisted company is droppe
 _Avoid_: Excluded company, banned company
 
 **Dry Run**:
-A `/job-hunt-dry-run` invocation: the same pipeline as `/job-hunt`, but `job-finder`'s search is capped to ~15 raw postings (fewer profiles queried, not a truncated full search) to validate the pipeline quickly. Uses real LinkedIn data and pushes to the real Job Tracker, but never writes `state/seen-jobs.json` and writes local output to `runs/<date>-dryrun/` instead of `runs/<date>/`.
+A `/job-hunt-dry-run` invocation: the same pipeline as a real run, but `job-finder`'s search is capped to ~15 raw postings (fewer profiles queried, not a truncated full search) and only the top 3 jobs are tailored. Runs both the Search Phase and the Tailor Phase back to back, so the handoff between them is exercised too. Uses real LinkedIn data and pushes to the real Job Tracker, but never writes `state/seen-jobs.json` — a skip that now lives inside the Search Phase — and writes output to `runs/<date>-dryrun/`.
 _Avoid_: Test run, sample run
 
 **Experience Cap**:
 The maximum years of experience a job may require (currently 4) before it's rejected outright during scoring, regardless of relevance score. Read from the job description's core-role requirement — a range or a secondary/preferred-skill callout above the cap doesn't trigger rejection on its own.
 _Avoid_: Seniority limit, years filter
+
+**Search Phase**:
+The unattended half of a run, invoked as `/job-hunt`: search LinkedIn, score for relevance, write `jobs.json` and a resume-less `shortlist.md`, push to the Job Tracker, and record every shortlisted job as a Seen Job. Produces no resumes. Runs off the user's clock because LinkedIn tool calls are serialized globally and can't be made faster — only moved.
+_Avoid_: Search step, find phase
+
+**Tailor Phase**:
+The attended half, invoked as `/job-hunt-tailor`: read a completed run's `jobs.json`, tailor the top 8 untailored jobs (or one named job), ATS-check each compiled PDF, and re-render `shortlist.md`. Refuses to run against an incomplete `jobs.json` — the top-8 selection needs the whole scored set.
+_Avoid_: Resume step, tailoring run
+
+**Seen Job**:
+A job recorded in `state/seen-jobs.json`, meaning a Search Phase *scored* it — not that anything was done with it. A Seen Job may never have been tailored. The log exists solely to stop the same posting being re-fetched and re-scored on later runs, and says nothing about whether a resume was produced.
+_Avoid_: Processed job, handled job
+
+**Pending Job**:
+A shortlisted job inside the 7-day retention window with no tailored resume yet — reachable via `/job-hunt-tailor`, and derived by diffing a run's `jobs.json` against its `tailored.json` rather than tracked in a file of its own. Once the window passes it becomes unreachable: it stays a Seen Job, so it never resurfaces in a future search.
+_Avoid_: Untailored job, skipped job, backlog

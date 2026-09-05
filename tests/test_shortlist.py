@@ -150,3 +150,35 @@ def test_renders_notion_sync_failures_section_when_present():
 def test_no_notion_sync_failures_section_when_absent():
     markdown = render_shortlist_markdown([], [])
     assert "## Notion Sync Failures" not in markdown
+
+
+def test_render_shortlist_shows_a_dash_for_an_untailored_job():
+    """The search phase writes shortlist.md before any resume exists."""
+    jobs = [
+        {
+            "title": "Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "score": 8.0,
+            "apply_link": "https://example.com/1",
+        }
+    ]
+
+    markdown = render_shortlist_markdown(jobs, [])
+
+    assert "| — |" in markdown
+
+
+def test_render_shortlist_still_uses_resume_path_when_present():
+    jobs = [
+        {
+            "title": "Engineer",
+            "company": "Acme",
+            "location": "Remote",
+            "score": 8.0,
+            "apply_link": "https://example.com/1",
+            "resume_path": "runs/2026-09-05/resumes/acme-engineer.pdf",
+        }
+    ]
+
+    assert "acme-engineer.pdf" in render_shortlist_markdown(jobs, [])

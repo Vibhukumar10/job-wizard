@@ -90,6 +90,31 @@ round-trips) → money (concurrency, token burn) → breadth (fewer pages/profil
   five postings were still live. Caveat: descriptions were re-fetched, not captured, so
   small diffs may be posting drift.
 
+- [Design the search/tailor handoff contract](issues/03-two-phase-handoff-contract.md) —
+  Immutable `jobs.json` (search) + `tailored.json` (tailor), one writer each, addressed
+  by `job_id`. Completion signalled by atomic tmp-rename, which doubles as the
+  once-daily guard. `shortlist.md` is written by search with `resume_path` as `—` and
+  re-rendered by tailor — the one place existing code breaks.
+
+- [Redefine "seen" and decide how long a lazy remainder stays tailorable](issues/04-seen-semantics-and-retention.md)
+  — `seen` means *scored*, not handled; appended at search time. Remainders stay
+  tailorable for 7 days (the same number as 03's lookback) and are then genuinely lost,
+  which is accepted rather than engineered around. `--pending` lists them; three
+  `CONTEXT.md` terms change.
+
+- [Specify the merged tailor agent, its ATS gate, and its retry policy](issues/05-merged-tailor-agent-scope.md)
+  — `resume-packager` deleted; the orchestrator runs `check-resume-pdf` against the PDF
+  the tailor already compiled, so it's 1 compile per job instead of 2 with the keyword
+  gate still independent. Wave of 8 → retry wave → ATS check → keyword-fix wave. Three
+  bounded retry budgets. Needs ADR 0008.
+
+- [Decide what "quality unchanged" actually measures](issues/02-quality-comparison-method.md)
+  — Deterministic proxies plus a *structural* comparison (sections, bullet counts, page
+  count, keyword coverage), never a prose diff, because the corpus descriptions were
+  re-fetched and drift. No LLM judge: no build item on this map touches the tailoring
+  prompt, so the prose-generating half is unchanged. `tests/test_golden.py` runs the
+  cheap half every time.
+
 ## Not yet specified
 
 - **Whether `min_shortlist: 15` still earns its keep** once only 8 jobs are tailored
@@ -100,11 +125,14 @@ round-trips) → money (concurrency, token burn) → breadth (fewer pages/profil
   data nobody has yet: how many of a day's shortlist you actually apply to. Revisit
   after a few real runs under the new shape.
 - **Whether the tailor phase can go faster still** — a cheaper/faster model for
-  tailoring, or splitting tailoring into a cheap draft plus a quality pass. Entirely
-  quality-coupled, so it can't even be discussed until there's a way to measure
-  quality.
-- **Run-folder retention** as untailored remainders accumulate across days. Related
-  to, but broader than, the retention question inside the `seen`-semantics ticket.
+  tailoring, or splitting tailoring into a cheap draft plus a quality pass. This is the
+  one change that would genuinely move prose quality, and ticket 02 deliberately left
+  the LLM-judge design unbuilt until it does. Picking this up means building that judge
+  first.
+- **Run-folder pruning.** Ticket 04 settled that the 7-day window governs
+  *reachability*, not disk — nothing deletes `runs/` today, and with one run folder in
+  existence it isn't yet a real problem. What should actually be deleted, and when,
+  stays unspecified until there's enough accumulation to judge.
 - **Whether `shortlist.md` should distinguish tailored from pending jobs**, and what
   a reader does with that column. Depends on the handoff contract's shape.
 
