@@ -73,6 +73,7 @@ scripts/               LaunchAgent installer, unattended search runner, golden-s
 state/seen-jobs.json    Dedup log across runs (gitignored, generated at runtime)
 state/notion-tracker.json  Created Notion database id (gitignored, generated at runtime)
 runs/<date>/            Daily output: jobs.json, tailored.json, shortlist.md, resumes (gitignored)
+runs/<date>/resumes/     Tailored resumes, named <company>-<job_id>.tex/.pdf
 runs/<date>-dryrun/      Dry-run output, isolated from real runs (gitignored)
 CONTEXT.md              Domain glossary
 docs/adr/                Architecture decision records

@@ -99,7 +99,7 @@ def _cmd_render_shortlist(args: argparse.Namespace) -> None:
 
 
 def _cmd_resume_filename(args: argparse.Namespace) -> None:
-    print(resume_filename(args.company, args.title))
+    print(resume_filename(args.company, args.job_id))
 
 
 def _cmd_notion_database_schema(args: argparse.Namespace) -> None:
@@ -216,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subparsers.add_parser("resume-filename", help="Deterministic tailored-resume filename")
     p.add_argument("company")
-    p.add_argument("title")
+    p.add_argument("job_id")
     p.set_defaults(func=_cmd_resume_filename)
 
     p = subparsers.add_parser("notion-database-schema", help="Print the Job Tracker database title + property schema")

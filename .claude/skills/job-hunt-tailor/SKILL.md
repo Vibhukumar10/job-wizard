@@ -72,8 +72,9 @@ spending agent time on resumes the user will never send.
 5. **Tailor — one wave, all of them at once.** Dispatch `resume-tailor` for every chosen
    job **concurrently, in a single turn** (multiple Agent tool calls in one message).
    Not batches: with 8 jobs, batching means waiting for the slowest job in each batch
-   twice over, for no benefit. Pass each agent its job's title, company, location, full
-   description (from `jobs.json`), and `runs/<date>/resumes/`.
+   twice over, for no benefit. Pass each agent its job's **`job_id`**, title, company, location, full
+   description (from `jobs.json`), and `runs/<date>/resumes/`. The `job_id` is required —
+   the output filename is `<company>-<job_id>.tex`.
 
    Each agent returns `resume_path`, `pdf_path`, and the `keywords` it inserted. It
    compiles and page-validates its own output — the PDF it produces is the final
