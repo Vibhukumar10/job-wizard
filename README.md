@@ -128,6 +128,13 @@ dedup, batching, markdown rendering, and filename generation. The relevance
 scoring and resume tailoring are LLM reasoning steps inside subagent prompts
 and are validated by running the pipeline for real, not by automated tests.
 
+For resume tailoring there is now a frozen baseline to compare against:
+[`tests/fixtures/golden/`](tests/fixtures/golden/) holds five real job
+descriptions, the tailored resume the pipeline produced for each, and the base
+resume they were tailored from. It exists so a change made for speed can be
+checked for having quietly cost quality. How the comparison is actually
+performed is still an open decision — see the map below.
+
 ## Documentation
 
 - [`.scratch/job-hunt/spec.md`](.scratch/job-hunt/spec.md) — problem
@@ -137,6 +144,12 @@ and are validated by running the pipeline for real, not by automated tests.
   [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - [`docs/agents/domain.md`](docs/agents/domain.md) — where domain context
   (`CONTEXT.md`, ADRs) lives for this repo.
+- [`.scratch/job-hunt-speedup/map.md`](.scratch/job-hunt-speedup/map.md) — the
+  in-progress plan for cutting a run's attended time from ~43 minutes to ≤15,
+  with per-decision tickets in
+  [`.scratch/job-hunt-speedup/issues/`](.scratch/job-hunt-speedup/issues/).
+- [`tests/fixtures/golden/`](tests/fixtures/golden/) — the frozen resume-quality
+  corpus that speedups are checked against.
 - [`CONTEXT.md`](CONTEXT.md) — domain glossary.
 - [`docs/adr/0001-notion-job-tracker.md`](docs/adr/0001-notion-job-tracker.md)
   — why the Job Tracker is Notion, write-only, and pushed via the MCP

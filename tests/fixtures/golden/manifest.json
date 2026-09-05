@@ -1,0 +1,64 @@
+{
+  "corpus_version": 1,
+  "frozen_on": "2026-09-05",
+  "reference_run": "runs/2026-08-18",
+  "base_resume": {
+    "path": "reference/BASE-main.tex",
+    "source": "resume/main.tex",
+    "last_modified_commit": "1d5f8fb",
+    "last_modified_date": "2026-08-16",
+    "note": "Verified unchanged since before the reference run, so it is the exact base that produced every reference below."
+  },
+  "jobs": [
+    {
+      "slug": "adobe-software-development-engineer-full-stack-ai-agents-developer-platforms",
+      "job_id": "4444888908",
+      "title": "Software Development Engineer, Full Stack (AI/Agents) - Developer Platforms",
+      "company": "Adobe",
+      "location": "Bengaluru East, Karnataka, India (On-site)",
+      "score": 8.5,
+      "pdf_error": false,
+      "still_accepting_applications": true
+    },
+    {
+      "slug": "akamai-technologies-software-engineer-ii",
+      "job_id": "4446857025",
+      "title": "Software Engineer II",
+      "company": "Akamai Technologies",
+      "location": "Bengaluru, Karnataka, India (Remote)",
+      "score": 8.5,
+      "pdf_error": true,
+      "still_accepting_applications": false
+    },
+    {
+      "slug": "canonical-software-engineer-app-stores",
+      "job_id": "4286647454",
+      "title": "Software Engineer - App Stores",
+      "company": "Canonical",
+      "location": "APJ (Remote)",
+      "score": 7.5,
+      "pdf_error": false,
+      "still_accepting_applications": true
+    },
+    {
+      "slug": "adobe-computer-scientist-ii-full-stack",
+      "job_id": "4444897395",
+      "title": "Computer Scientist II (Full Stack)",
+      "company": "Adobe",
+      "location": "Noida, Uttar Pradesh, India (On-site)",
+      "score": 6.5,
+      "pdf_error": false,
+      "still_accepting_applications": true
+    },
+    {
+      "slug": "amazon-system-development-engineer-tfs-onboarding",
+      "job_id": "4455546402",
+      "title": "System Development Engineer, TFS-Onboarding",
+      "company": "Amazon",
+      "location": "Bengaluru, Karnataka, India (On-site)",
+      "score": 6.0,
+      "pdf_error": false,
+      "still_accepting_applications": false
+    }
+  ]
+}
