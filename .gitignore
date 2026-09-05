@@ -12,3 +12,6 @@ state/seen-jobs.json
 
 # Notion Job Tracker database_id, created on first /job-hunt run — mutable runtime state, not source
 state/notion-tracker.json
+
+# Unattended search-phase logs — runtime output, not source
+state/logs/

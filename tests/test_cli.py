@@ -5,8 +5,8 @@ from pipeline.cli import main
 
 
 def test_resume_filename_command(capsys):
-    main(["resume-filename", "Acme Corp", "Backend Engineer"])
-    assert capsys.readouterr().out.strip() == "acme-corp-backend-engineer.tex"
+    main(["resume-filename", "Acme Corp", "4455266391"])
+    assert capsys.readouterr().out.strip() == "acme-corp-4455266391.tex"
 
 
 def test_load_config_command(tmp_path, capsys):

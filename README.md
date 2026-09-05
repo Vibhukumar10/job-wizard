@@ -3,37 +3,57 @@
 Automated daily job search and resume tailoring, built as a set of Claude Code
 skills/subagents plus a small tested Python pipeline.
 
-Every day, `/job-hunt`:
+A run happens in **two phases**, deliberately split so the slow half never
+costs you time you're awake for.
 
-1. Searches LinkedIn for jobs posted in the last 24 hours, across a set of
-   configured search profiles, including dedicated profiles for any
-   "wider-net" target companies.
+### Phase 1 — `/job-hunt`, unattended
+
+Runs from a LaunchAgent when your machine wakes, and produces no resumes:
+
+1. Searches LinkedIn for jobs posted in the last 24 hours across your
+   configured profiles, including dedicated profiles for any "wider-net"
+   target companies.
 2. Filters out anything already seen on a previous run, and anything at a
    blacklisted company.
-3. Scores the rest for relevance against your resume (experience-level fit,
-   tech-stack/domain fit, location fit, product-vs-service company,
-   target-company boost), rejecting anything over the configured experience
-   cap outright.
-4. Selects the final shortlist: everything scoring at or above the relevance
-   threshold, up to a safety cap — backfilled with the next-highest-scoring
-   jobs below threshold if too few clear it organically, so a `min_shortlist`
-   floor is met without relaxing the experience cap or blacklist. Backfilled
-   jobs are marked as such.
-5. Tailors a copy of your LaTeX resume for each shortlisted job — reworded
-   summary/skills/bullets and updated location, no fabricated experience —
-   then validates and, if needed, shrinks its own output so it compiles and
-   fits one page before handing off (see
-   [ADR 0005](docs/adr/0005-shift-left-page-validation.md)).
-6. Compiles a validated, ATS-checked one-page PDF for each tailored resume
-   (`resume-packager`) — see [ADR 0003](docs/adr/0003-resume-pdf-generation.md).
-   A job whose PDF can't be produced keeps its `.tex` as a fallback.
-7. Writes a dated run folder with a `shortlist.md` and one tailored
-   `.tex`/`.pdf` pair per job, ready to apply with.
-8. Pushes every shortlisted job into a Notion database (the "Job Tracker")
-   as a cumulative, cross-run view, upserted by `job_id`, with a hand-set
-   `Applied` checkbox the pipeline never reads back, and the resume PDF
-   attached where one exists — see
-   [ADR 0001](docs/adr/0001-notion-job-tracker.md).
+3. Scores the rest against your resume (experience-level fit, tech-stack/domain
+   fit, location fit, product-vs-service company, target-company boost),
+   rejecting anything over the experience cap outright.
+4. Selects the shortlist: everything at or above the relevance threshold, up to
+   a safety cap — backfilled with the next-highest-scoring jobs below threshold
+   if too few clear it organically, so a `min_shortlist` floor is met without
+   relaxing the experience cap or blacklist. Backfilled jobs are marked.
+5. Writes `runs/<date>/jobs.json` (the handoff artifact, carrying each job's
+   full description) and a `shortlist.md` whose Resume column reads `—`,
+   because nothing is tailored yet.
+6. Pushes every shortlisted job into the Notion "Job Tracker" — a cumulative,
+   cross-run view upserted by `job_id`, with a hand-set `Applied` checkbox the
+   pipeline never reads back. See [ADR 0001](docs/adr/0001-notion-job-tracker.md).
+
+This phase is irreducibly slow — roughly 14 minutes — because
+`mcp-server-linkedin` serializes every tool call globally, across processes, to
+protect one shared Chromium profile. No amount of parallelism helps. So rather
+than making it faster it was moved off your clock entirely.
+
+### Phase 2 — `/job-hunt-tailor`, when you sit down
+
+7. Tailors your LaTeX resume for the **top 8** shortlisted jobs — reworded
+   summary/skills/bullets and updated location, nothing fabricated — each agent
+   compiling and, if needed, shrinking its own output to one page before
+   returning (see [ADR 0005](docs/adr/0005-shift-left-page-validation.md)).
+   All 8 run as a single concurrent wave.
+8. Runs a deterministic ATS keyword check against each compiled PDF, outside any
+   agent, so the agent that inserted the keywords never grades whether they
+   survived (see [ADR 0008](docs/adr/0008-merge-resume-packager.md)). A job whose
+   PDF can't be produced keeps its `.tex` as the fallback.
+9. Re-renders `shortlist.md` with resume paths filled in.
+
+The other shortlisted jobs aren't discarded — they stay in `jobs.json` and remain
+tailorable on demand for 7 days:
+
+```
+/job-hunt-tailor --pending          # what's still reachable, and what's expiring
+/job-hunt-tailor Adobe              # tailor one job by company/title or job_id
+```
 
 See [`.scratch/job-hunt/spec.md`](.scratch/job-hunt/spec.md) for the full
 spec and design rationale.
@@ -44,13 +64,16 @@ spec and design rationale.
 config/search.yaml   Search profiles, thresholds, company lists, min/max shortlist size
 resume/main.tex       Your base resume (version-controlled, user-maintained)
 resume/resume.cls      LaTeX class file for the resume
-pipeline/             Tested Python module: config/dedup/batching/companies/naming/pdf/shortlist/notion_tracker
+pipeline/             Tested Python module: config/dedup/batching/companies/naming/pdf/shortlist/run_store/notion_tracker
 tests/                 pytest unit tests for pipeline/
-.claude/agents/        job-finder, resume-tailor, and resume-packager subagent definitions
-.claude/skills/         /job-hunt orchestration skill, /job-hunt-dry-run minimal validation pass
+tests/fixtures/golden/  Frozen resume-quality corpus speedups are checked against
+scripts/               LaunchAgent installer, unattended search runner, golden-set comparison
+.claude/agents/        job-finder and resume-tailor subagent definitions
+.claude/skills/         /job-hunt search phase, /job-hunt-tailor resume phase, /job-hunt-dry-run
 state/seen-jobs.json    Dedup log across runs (gitignored, generated at runtime)
 state/notion-tracker.json  Created Notion database id (gitignored, generated at runtime)
-runs/<date>/            Daily output: shortlist.md + tailored resumes/PDFs (gitignored)
+runs/<date>/            Daily output: jobs.json, tailored.json, shortlist.md, resumes (gitignored)
+runs/<date>/resumes/     Tailored resumes, named <company>-<job_id>.tex/.pdf
 runs/<date>-dryrun/      Dry-run output, isolated from real runs (gitignored)
 CONTEXT.md              Domain glossary
 docs/adr/                Architecture decision records
@@ -84,36 +107,55 @@ its database on the first run under your "Upskill 2k26" page.
 
 ## Usage
 
-Run the full pipeline on demand from Claude Code:
+### Scheduling the search phase
 
 ```
-/job-hunt
+./scripts/install-launchagent.sh
 ```
 
-This dispatches the `job-finder` subagent (search + relevance scoring), then
-per shortlisted job (batches of 5, concurrently) the `resume-tailor`
-subagent followed by `resume-packager`, via the `/job-hunt` skill, then
-upserts every shortlisted job into the Notion Job Tracker. Output lands in
-`runs/<YYYY-MM-DD>/shortlist.md`, `runs/<YYYY-MM-DD>/resumes/` (`.tex` +
-`.pdf` per job), and the Notion database itself.
+Installs a LaunchAgent set for 07:00 daily. On a laptop that sleeps with the lid
+closed it will instead run **the first time you open the lid that day** — a
+closed lid stops a `launchd` job firing, but `StartCalendarInterval` coalesces
+the missed firing into a single catch-up run on wake. That's the intended
+behaviour, not a fallback: it costs no nightly habit and can never silently miss
+a morning.
 
-The pipeline can also be scheduled to run automatically once a day via
-Claude Code's `/schedule` cron skill (see
-[`.scratch/job-hunt/issues/05-daily-schedule.md`](.scratch/job-hunt/issues/05-daily-schedule.md)) —
-not yet registered.
+A locked screen is fine — screen lock doesn't tear down the GUI session the
+headed Chromium needs. Logging out does kill it.
 
-To validate the pipeline quickly (e.g. after a change) without a full run's
-time/token cost:
+`/schedule` cannot be used for this. Claude Code routines run on
+Anthropic-managed cloud infrastructure and can't reach a locally-configured
+stdio MCP server driving a local browser profile.
+
+### Running by hand
+
+```
+/job-hunt          # search phase — safe to run after the LaunchAgent already has
+/job-hunt-tailor   # tailor the top 8 from today's run
+```
+
+`/job-hunt` refuses to re-search if today's run already completed, so invoking it
+manually after an automatic run is a no-op rather than a duplicate. Output lands
+in `runs/<YYYY-MM-DD>/`: `jobs.json`, `shortlist.md`, `tailored.json`, and
+`resumes/` (`.tex` + `.pdf` per tailored job), plus the Notion database itself.
+
+```
+/job-hunt-tailor --pending             # what's still tailorable, and what expires soon
+/job-hunt-tailor 4444888908            # one job by id
+/job-hunt-tailor Canonical             # or by company/title fragment
+/job-hunt-tailor --date 2026-09-01     # an earlier run, within the 7-day window
+```
+
+### Validating a change
 
 ```
 /job-hunt-dry-run
 ```
 
-Same pipeline, but `job-finder`'s search is capped to ~15 raw postings
-instead of every configured profile. Still real LinkedIn data and a real
-push to the Notion Job Tracker; the only things it skips are writing
-`state/seen-jobs.json` and using `runs/<date>/` (it writes to
-`runs/<date>-dryrun/` instead) — see
+Runs **both** phases end to end against a capped ~15-posting search, tailoring
+only the top 3 — so the handoff between the phases is exercised, which is the
+part most likely to break. Real LinkedIn data and a real Notion push; it skips
+writing `state/seen-jobs.json` and writes to `runs/<date>-dryrun/`. See
 [ADR 0006](docs/adr/0006-dry-run-mode.md).
 
 ## Development
@@ -128,6 +170,13 @@ dedup, batching, markdown rendering, and filename generation. The relevance
 scoring and resume tailoring are LLM reasoning steps inside subagent prompts
 and are validated by running the pipeline for real, not by automated tests.
 
+For resume tailoring there is now a frozen baseline to compare against:
+[`tests/fixtures/golden/`](tests/fixtures/golden/) holds five real job
+descriptions, the tailored resume the pipeline produced for each, and the base
+resume they were tailored from. It exists so a change made for speed can be
+checked for having quietly cost quality. How the comparison is actually
+performed is still an open decision — see the map below.
+
 ## Documentation
 
 - [`.scratch/job-hunt/spec.md`](.scratch/job-hunt/spec.md) — problem
@@ -137,6 +186,12 @@ and are validated by running the pipeline for real, not by automated tests.
   [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - [`docs/agents/domain.md`](docs/agents/domain.md) — where domain context
   (`CONTEXT.md`, ADRs) lives for this repo.
+- [`.scratch/job-hunt-speedup/map.md`](.scratch/job-hunt-speedup/map.md) — the
+  in-progress plan for cutting a run's attended time from ~43 minutes to ≤15,
+  with per-decision tickets in
+  [`.scratch/job-hunt-speedup/issues/`](.scratch/job-hunt-speedup/issues/).
+- [`tests/fixtures/golden/`](tests/fixtures/golden/) — the frozen resume-quality
+  corpus that speedups are checked against.
 - [`CONTEXT.md`](CONTEXT.md) — domain glossary.
 - [`docs/adr/0001-notion-job-tracker.md`](docs/adr/0001-notion-job-tracker.md)
   — why the Job Tracker is Notion, write-only, and pushed via the MCP
@@ -150,9 +205,13 @@ and are validated by running the pipeline for real, not by automated tests.
   — guaranteeing shortlist volume via score-ordered backfill, not a lowered
   quality bar.
 - [`docs/adr/0005-shift-left-page-validation.md`](docs/adr/0005-shift-left-page-validation.md)
-  — why `resume-tailor`, not just `resume-packager`, validates the one-page
-  limit before handing off.
+  — why `resume-tailor` validates the one-page limit itself rather than
+  leaving it to a downstream step. Its shift-left argument still holds; its
+  framing of a separate packager as the backstop is revised by ADR 0008.
 - [`docs/adr/0006-dry-run-mode.md`](docs/adr/0006-dry-run-mode.md) — why
   `/job-hunt-dry-run` is a separate skill, caps search scope rather than
   truncating after the fact, and pushes to Notion for real but skips
   `seen-jobs.json`.
+- [`docs/adr/0008-merge-resume-packager.md`](docs/adr/0008-merge-resume-packager.md)
+  — why `resume-packager` was deleted, and why moving the ATS check into
+  deterministic Python makes the gate *more* independent, not less.

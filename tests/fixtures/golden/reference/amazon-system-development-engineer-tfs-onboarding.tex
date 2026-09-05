@@ -1,0 +1,120 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Vibhu Kumar Singh - Resume (ATS-optimized layout)
+% Every change vs. the original is marked with "% ATS:"
+% Compile with: pdflatex resume.tex   (pdfLaTeX, NOT XeLaTeX - keeps glyphtounicode)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass{resume}
+
+% ATS: margins widened from 0.4in to 0.5in. Sub-0.5in margins push text into the
+% zone some parsers and print-to-scan pipelines crop or ignore.
+\usepackage[left=0.5in,top=0.45in,right=0.5in,bottom=0.45in]{geometry}
+
+\usepackage{enumitem}
+% ATS: explicit \textbullet label (maps to U+2022) instead of the default math
+% \bullet, which was being extracted as an empty character.
+\setlist[itemize]{label=\textbullet, topsep=2pt, partopsep=0pt, parsep=0pt,
+                  itemsep=1pt, leftmargin=1.2em, rightmargin=0pt}
+
+\name{Vibhu Kumar Singh}
+
+% ATS: contact line changes
+%  - separator is now "|" instead of the math diamond
+%  - "LinkedIn"/"GitHub" replaced by the VISIBLE URL text (parsers read the anchor
+%    text, not the underlying href - the profile URLs were invisible before)
+%  - phone written in full international format
+% WORKDAY: location written as City, State, Country. Workday splits location into
+% three fields (City / State-Province / Country) and prints the empty one as a bare
+% comma - "Bengaluru, , India". Naming Karnataka fills the middle field.
+\address{
+Bengaluru, Karnataka, India \\
++91 8076570505 \\
+\href{mailto:vibhukumar1224@gmail.com}{vibhukumar1224@gmail.com}
+}
+\address{
+\href{https://www.linkedin.com/in/vibhu-kumar-singh/}{linkedin.com/in/vibhu-kumar-singh} \\
+\href{https://github.com/Vibhukumar10}{github.com/Vibhukumar10}
+}
+
+\begin{document}
+
+% ── PROFILE SUMMARY ──────────────────────────────────────────────────────────
+\begin{rSection}{Profile Summary}
+
+Software Engineer with experience automating, deploying, and supporting cloud-native infrastructure and backend systems using \textbf{Java} and \textbf{Python}. Proficient in building \textbf{CI/CD and GitOps automation pipelines}, metric-generation and reporting tooling, and infrastructure-as-code with \textbf{Kubernetes, FluxCD, Ansible, and Terraform} in \textbf{Linux}-based environments. Experienced on \textbf{Oracle Cloud Infrastructure (OCI)}, with a strong foundation in distributed systems and writing clean,~maintainable~code.
+
+\end{rSection}
+
+% ── EXPERIENCE ───────────────────────────────────────────────────────────────
+\begin{rSection}{Work Experience}
+
+% Job title alone on line 1. Line 2 keeps the bold employer and the location
+% flush LEFT and pushes the date range flush RIGHT with \hspace*{\fill}.
+% (\hfill alone would only half-push the date, because \raggedright already puts
+% stretchable glue at the right margin.)
+% The date sits on the employer line rather than the title line so that, even
+% though right-aligned text always extracts onto its own line, the date is the
+% line immediately following the employer + location - the tightest grouping
+% possible while keeping the alignment you want.
+% Full month names are used because Workday's date regex resolves them most reliably.
+\textbf{Software Engineer II} \\
+\textbf{Oracle} \textbar{} Bengaluru, Karnataka, India \hspace*{\fill} September 2024 - Present
+\vspace{-2pt}
+\begin{itemize}
+    \item Engineered and maintained \textbf{CNAP}, a cloud-native deployment automation platform using \textbf{FluxCD}, \textbf{Ansible}, and \textbf{Terraform}, automating infrastructure provisioning and eliminating manual configuration.
+    \item Built and deployed a \textbf{FluxCD MCP server} to support \textbf{GitOps CI/CD workflows} by querying deployment status, debugging synchronization issues, detecting configuration drift, and alerting on failed or delayed deployments.
+    \item Deployed, operated, and scaled backend microservices on \textbf{Kubernetes} in \textbf{Linux}-based environments with integrated \textbf{Prometheus} monitoring and centralized logging, improving observability and reporting.
+    \item Implemented \textbf{Python} based cross-repository watchdog health checks leveraging \textbf{OpenSearch} to aggregate metrics and generate failure reports, improving operational visibility across \textbf{CNAP} services.
+    \item Designed and maintained Java microservices with \textbf{Spring Boot} and \textbf{Helidon} for secure, reliable service communication across distributed environments.
+    \item Improved backend API performance by \textbf{30\%} via request-processing refactors, \textbf{connection pooling}, \textbf{asynchronous execution}, and \textbf{Liquibase-managed} schema migrations; validated via \textbf{JUnit} and integration tests.
+\end{itemize}
+
+\vspace{6pt}
+
+\textbf{Software Engineer} \\
+\textbf{Oracle} \textbar{} Bengaluru, Karnataka, India \hspace*{\fill} January 2023 - September 2024
+\vspace{-2pt}
+\begin{itemize}
+    \item Built and maintained \textbf{RESTful backend services} using \textbf{Java (Helidon MicroProfile)}, with \textbf{OpenAPI} compliant APIs, \textbf{MySQL} persistence, and \textbf{OAuth 2.0} authentication.
+    \item Built front-end applications using \textbf{Oracle JET} and \textbf{React}, integrating with \textbf{RESTful APIs} for end-to-end features.
+\end{itemize}
+
+\end{rSection}
+
+% ── SKILLS ───────────────────────────────────────────────────────────────────
+\begin{rSection}{Skills}
+
+% ATS: the two-column tabular was the worst offender. Raw text extraction read it
+% column-by-column, producing all six labels first and all six value lists after,
+% so no skill was linked to its category. This is now plain "Label: values" text.
+\vspace{-2pt}
+\textbf{Programming Languages:} Java, Python, C++, JavaScript, Shell \\
+\textbf{Cloud, DevOps \& Automation:} Git, Docker, Kubernetes, Terraform, Ansible, CI/CD, GitOps, Linux, AWS, OCI \\
+\textbf{Backend \& Frameworks:} Helidon, Spring Boot, Microservices, Apache Kafka, Node.js \\
+\textbf{Testing:} JUnit, Mockito, Unit \& Integration Testing, Test Automation \\
+\textbf{Frontend:} HTML, CSS, React, Next.js, Oracle JET \\
+\textbf{AI Tools \& Technologies:} LLM, RAG, MCP, Agentic AI, Copilot, ChatGPT
+
+\end{rSection}
+
+% ── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
+\begin{rSection}{Achievements}
+
+\begin{itemize}
+    \item Oracle Cloud Infrastructure Certified Foundations Associate
+    \item Active \textbf{LeetCode} problem solver with strong focus on data structures, algorithms, and system design.
+\end{itemize}
+
+\end{rSection}
+
+% ── EDUCATION ────────────────────────────────────────────────────────────────
+\begin{rSection}{Education}
+
+% WORKDAY: institution and dates on one line, degree and field on the next.
+% No \hfill anywhere, so the graduation year stays bound to the institution.
+\textbf{Vellore Institute of Technology, Vellore} \textbar{} 2019 - 2023 \\
+Bachelor of Technology, Computer Science and Engineering \textbar{} CGPA: 8.79
+
+\end{rSection}
+
+\end{document}

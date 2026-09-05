@@ -3,6 +3,11 @@ from typing import Any
 SHORTLIST_HEADER = "| Title | Company | Location | Score | Apply Link | Resume | Backfill |"
 SHORTLIST_DIVIDER = "| --- | --- | --- | --- | --- | --- | --- |"
 
+#: Shown in the Resume column for a job the search phase has shortlisted but
+#: nothing has tailored yet. The search phase writes shortlist.md before any
+#: resume exists, so this is the normal state of a fresh run, not an error.
+PENDING_RESUME = "—"
+
 
 def select_shortlist(
     scored_jobs: list[dict[str, Any]],
@@ -53,7 +58,7 @@ def render_shortlist_markdown(
             job["location"],
             job["score"],
             job["apply_link"],
-            job["resume_path"],
+            job.get("resume_path") or PENDING_RESUME,
             "Yes" if job.get("backfilled") else "",
         ]
         lines.append("| " + " | ".join(_cell(c) for c in cells) + " |")
