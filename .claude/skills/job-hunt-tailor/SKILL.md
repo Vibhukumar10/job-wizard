@@ -1,24 +1,33 @@
 ---
 name: job-hunt-tailor
-description: Tailors resumes for jobs an earlier /job-hunt search already shortlisted — the top 8 by default, or one job named by job_id or company/title. Compiles and ATS-checks each PDF, then updates the run's shortlist.md. Use when the user runs /job-hunt-tailor, asks for resumes for today's shortlist, wants a resume for one specific job, or asks what's still pending.
+description: Recovery tool for resumes /job-hunt didn't produce — retries jobs that failed during a run, tailors a single job named by job_id or company/title, or reaches a job from an earlier run inside the 7-day window. A normal day never needs this; /job-hunt already tailors every shortlisted job. Use when the user runs /job-hunt-tailor, asks to retry a failed resume, wants a resume for one specific job, or asks what's still pending.
 ---
 
 # /job-hunt-tailor
 
-The **attended phase**. `/job-hunt` has already searched, scored, and written
-`runs/<date>/jobs.json`; this turns some of those jobs into tailored resumes while the
-user is actually at the machine.
+A **recovery tool**, not a phase of the daily run.
 
-It tailors the **top 8 by score** by default, not everything. The rest stay in
-`jobs.json` and remain tailorable on demand for 7 days. That is not a narrowing of the
-search — every job the search found is still in `shortlist.md` — it just stops the run
-spending agent time on resumes the user will never send.
+[`/job-hunt`](../job-hunt/SKILL.md) tailors a resume for every shortlisted job in the
+same call as the search, so on a normal day there is nothing left for this skill to do.
+It exists for the cases `/job-hunt` leaves behind:
+
+- a job whose tailoring failed twice during the run,
+- one specific job the user wants re-tailored (`--force`),
+- a job from an **earlier** run, still inside the 7-day window,
+- answering "what's still missing a resume?" (`--pending`).
+
+If the user invokes this and today's run is complete with nothing pending, say so
+rather than re-tailoring work that is already done.
+
+**There is no top-N cap here.** The default is *every* untailored job in the run, which
+is the same rule `/job-hunt` follows — see
+[ADR 0009](../../../docs/adr/0009-single-phase-run.md).
 
 ## Modes
 
 | Invocation | Does |
 | --- | --- |
-| `/job-hunt-tailor` | Tailor the top 8 untailored jobs from today's run |
+| `/job-hunt-tailor` | Tailor every untailored job in today's run |
 | `/job-hunt-tailor <job_id or fragment>` | Tailor that one job |
 | `/job-hunt-tailor --pending` | List what's still tailorable, tailor nothing |
 | `--date <YYYY-MM-DD>` | Operate on that run instead of today's |
@@ -30,8 +39,7 @@ spending agent time on resumes the user will never send.
    the user plainly — installing it (`brew install --cask basictex`) is one-time
    environment setup, not something a run can work around. `pdflatex` specifically, not
    `xelatex`/`tectonic`: `resume.cls` depends on the pdfTeX-only `glyphtounicode`
-   mechanism for ATS-correct text extraction. Check once, up front, rather than letting
-   every job rediscover it.
+   mechanism for ATS-correct text extraction.
 
 2. **Handle `--pending` and exit.** If asked for pending work:
    ```
@@ -48,45 +56,44 @@ spending agent time on resumes the user will never send.
    uv run python -m pipeline.cli run-status runs/<date>
    ```
    - `complete` — proceed.
-   - `in_flight` — a search is running right now. **Do not tailor from a partial file.**
-     The top-8 selection needs the complete scored set, so tailoring now would pick the
-     wrong eight. Tell the user the search is still going and offer to wait.
-   - `missing` — no search has run for that date. Say so and offer to run `/job-hunt`,
-     rather than erroring on a missing file.
+   - `in_flight` — a run is searching right now, and it will tailor these jobs itself
+     when it gets there. **Do not tailor from a partial file.** Tell the user the run is
+     still going and offer to wait.
+   - `missing` — no run for that date. Say so and offer to run `/job-hunt`, rather than
+     erroring on a missing file.
 
 4. **Pick the jobs.**
    - **Named job:** `uv run python -m pipeline.cli resolve-job runs/<date> '<query>'`.
      This matches `job_id` exactly first, then falls back to a company/title fragment,
      and errors if the fragment is ambiguous rather than guessing. Report the ambiguity
      to the user with the candidates so they can be more specific.
-   - **Default:** read the run's jobs and its existing outcomes, drop anything already
-     in `tailored.json` (unless `--force`), and take the top 8:
+   - **Default:** read the run's jobs and its existing outcomes, and take **every** job
+     not already in `tailored.json` (unless `--force`):
      ```
      uv run python -m pipeline.cli read-jobs runs/<date>
      uv run python -m pipeline.cli read-tailored runs/<date>
-     uv run python -m pipeline.cli select-eager --count 8 --jobs '<json of untailored jobs>'
      ```
    - If a chosen job already has a `.tex` and `--force` wasn't given, skip it and say so.
      Silently re-burning an agent on finished work is the failure mode here.
 
-5. **Tailor — one wave, all of them at once.** Dispatch `resume-tailor` for every chosen
-   job **concurrently, in a single turn** (multiple Agent tool calls in one message).
-   Not batches: with 8 jobs, batching means waiting for the slowest job in each batch
-   twice over, for no benefit. Pass each agent its job's **`job_id`**, title, company, location, full
-   description (from `jobs.json`), and `runs/<date>/resumes/`. The `job_id` is required —
-   the output filename is `<company>-<job_id>.tex`.
+5. **Tailor, in concurrency-bounded waves of 5.**
+   ```
+   uv run python -m pipeline.cli batch --size 5 --jobs '<json of chosen jobs>'
+   ```
+   Each batch's agents go out concurrently in a single message; the next batch starts
+   only once that wave returns. Pass each agent its job's **`job_id`**, title, company,
+   location, full description (from `jobs.json`), and `runs/<date>/resumes/`. The
+   `job_id` is required — the output filename is `<company>-<job_id>.tex`.
 
    Each agent returns `resume_path`, `pdf_path`, and the `keywords` it inserted. It
    compiles and page-validates its own output — the PDF it produces is the final
    artifact and is **not** recompiled downstream.
 
 6. **Retry wave.** Any job whose agent failed gets exactly one retry, dispatched **after**
-   the first wave completes — never rejoined into it, which would reintroduce the
-   head-of-line blocking the single wave exists to avoid. A second failure is recorded as
-   a failure and the run continues.
+   the waves complete — never rejoined into a running one. A second failure is recorded
+   as a failure and the run continues.
 
-7. **ATS check — deterministic, outside any agent.** Once the waves are done, for each
-   successfully tailored job:
+7. **ATS check — deterministic, outside any agent.** For each successfully tailored job:
    ```
    uv run python -m pipeline.cli check-resume-pdf --pdf <pdf_path> --keywords '<json keywords>'
    ```
@@ -105,7 +112,7 @@ spending agent time on resumes the user will never send.
    uv run python -m pipeline.cli record-tailored runs/<date> <job_id> --outcome '<json>'
    ```
    with `tex_path`, `pdf_path` (omit on `pdf_error`), `keywords`, and `error` if any.
-   `tailored.json` is this phase's file — never write `jobs.json`.
+   `tailored.json` is this skill's file — never write `jobs.json`.
 
 10. **Re-render `shortlist.md`** for the whole run, so it reflects both tailored and
     still-pending jobs:
@@ -123,15 +130,13 @@ spending agent time on resumes the user will never send.
 
 ## Notes
 
-- **Never tailor from an incomplete `jobs.json`.** Step 3 exists because the search phase
-  now fires on machine wake, so the user can easily invoke this while a search is still
-  running.
+- **Never tailor from an incomplete `jobs.json`.** Step 3 exists because `/job-hunt`
+  fires on machine wake, so the user can easily invoke this while a run is mid-search.
 - Retry budgets are bounded and distinct: one fix-and-recompile inside the agent (page
   or compile), one re-dispatch of a failed agent, one keyword-restore pass. No step gets
   a third attempt.
-- Everything deterministic routes through `pipeline.cli`. If you find yourself
-  hand-picking the top 8, resolving a job query by eye, or hand-writing markdown, stop —
-  that logic lives in `pipeline/run_store.py` and is tested.
-- This phase touches neither LinkedIn nor Notion. Both belong to the search phase, which
-  means this one is not subject to the LinkedIn serialization lock at all — the only
-  reason a wide wave of tailors is worth doing here.
+- Everything deterministic routes through `pipeline.cli`. If you find yourself resolving
+  a job query by eye, batching by hand, or hand-writing markdown, stop — that logic lives
+  in `pipeline/run_store.py` and is tested.
+- This skill touches neither LinkedIn nor Notion. Both belong to `/job-hunt`, which means
+  this one is not subject to the LinkedIn serialization lock at all.

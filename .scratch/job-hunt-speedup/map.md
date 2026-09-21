@@ -2,6 +2,20 @@
 
 Label: wayfinder:map
 
+> **Superseded in part — read this first.** Two decisions on this map were
+> reversed by [ADR 0009](../../docs/adr/0009-single-phase-run.md): the
+> **two-phase split** (`/job-hunt` search + `/job-hunt-tailor` attended) and the
+> **top-8 eager tailoring cap**. One `/job-hunt` call now runs the whole hunt and
+> tailors *every* shortlisted job in waves of 5, per spec stories 9 and 16.
+> The destination below — minimising *attended* time — is no longer the goal.
+>
+> The map's other outcomes stand and are unaffected: the LaunchAgent wake
+> trigger (06, 07), the merged `resume-tailor` and deterministic ATS gate (05,
+> ADR 0008), `seen` meaning *scored* (04), and the frozen golden corpus (01, 02).
+> Tickets 03 and 05's handoff artifacts (`jobs.json` / `tailored.json`, one
+> writer each, atomic rename) also survive — they are what makes the merged run
+> resumable.
+
 ## Destination
 
 A **decided plan** — not code — for cutting the time you personally sit through a
@@ -57,13 +71,17 @@ round-trips) → money (concurrency, token burn) → breadth (fewer pages/profil
 - `resume-packager` merges into `resume-tailor`; the ATS keyword check becomes a
   deterministic orchestrator step over the existing `check-resume-pdf`, so the gate
   stays independent of the agent that inserted the keywords.
-- Only the top **8** shortlisted jobs get tailored eagerly; the rest are tailorable
-  on demand. This is not a breadth cut — every job still reaches `shortlist.md`.
-- One wave of 8 concurrent tailors, not batches of 5.
+- ~~Only the top **8** shortlisted jobs get tailored eagerly; the rest are tailorable
+  on demand.~~ **Reversed by ADR 0009** — every shortlisted job is tailored.
+- ~~One wave of 8 concurrent tailors, not batches of 5.~~ **Reversed by ADR 0009**:
+  correct for a fixed 8, but the cap's removal means up to `max_shortlist: 50`
+  concurrent agents. Back to bounded waves of 5, per spec story 16.
 - The Notion push moves wholesale into the unattended phase; `Notes` loses the
   tailoring-error text (`shortlist.md` still reports every failure).
-- Surfaces after the split: `/job-hunt` = unattended search phase, `/job-hunt-tailor`
-  = attended phase, `/job-hunt-dry-run` = both, end-to-end, against its capped pool.
+- ~~Surfaces after the split: `/job-hunt` = unattended search phase, `/job-hunt-tailor`
+  = attended phase.~~ **Reversed by ADR 0009**: `/job-hunt` = the whole run,
+  `/job-hunt-tailor` = a recovery tool only. `/job-hunt-dry-run` still runs
+  end-to-end against its capped pool, tailoring 3.
 - The unattended trigger is a **local LaunchAgent, not `/schedule`** — corrected by
   ticket 06. Claude Code routines run in Anthropic's cloud and cannot reach the local
   stdio MCP server that drives the logged-in Chromium profile.
@@ -117,13 +135,11 @@ round-trips) → money (concurrency, token burn) → breadth (fewer pages/profil
 
 ## Not yet specified
 
-- **Whether `min_shortlist: 15` still earns its keep** once only 8 jobs are tailored
-  eagerly. It interacts with the backfill rule in ADR 0004, whose whole argument was
-  about shortlist *volume* — an argument that may not survive the eager/lazy split.
-  Can't sharpen until the handoff contract exists.
-- **Whether 8 is the right N.** It's a starting guess, not a measured number. Needs
-  data nobody has yet: how many of a day's shortlist you actually apply to. Revisit
-  after a few real runs under the new shape.
+- ~~**Whether `min_shortlist: 15` still earns its keep**~~ — **closed by ADR 0009.**
+  With every shortlisted job tailored, volume translates directly into resumes again,
+  which is exactly what ADR 0004's backfill argument assumed.
+- ~~**Whether 8 is the right N.**~~ — **closed by ADR 0009**: there is no N. The
+  question was always a symptom of a cap the spec never asked for.
 - **Whether the tailor phase can go faster still** — a cheaper/faster model for
   tailoring, or splitting tailoring into a cheap draft plus a quality pass. This is the
   one change that would genuinely move prose quality, and ticket 02 deliberately left

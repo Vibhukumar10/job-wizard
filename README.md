@@ -3,12 +3,8 @@
 Automated daily job search and resume tailoring, built as a set of Claude Code
 skills/subagents plus a small tested Python pipeline.
 
-A run happens in **two phases**, deliberately split so the slow half never
-costs you time you're awake for.
-
-### Phase 1 — `/job-hunt`, unattended
-
-Runs from a LaunchAgent when your machine wakes, and produces no resumes:
+One `/job-hunt` call does the whole run — search, score, track, and a tailored
+resume for **every** shortlisted job. There is no second command to remember.
 
 1. Searches LinkedIn for jobs posted in the last 24 hours across your
    configured profiles, including dedicated profiles for any "wider-net"
@@ -22,38 +18,44 @@ Runs from a LaunchAgent when your machine wakes, and produces no resumes:
    a safety cap — backfilled with the next-highest-scoring jobs below threshold
    if too few clear it organically, so a `min_shortlist` floor is met without
    relaxing the experience cap or blacklist. Backfilled jobs are marked.
-5. Writes `runs/<date>/jobs.json` (the handoff artifact, carrying each job's
-   full description) and a `shortlist.md` whose Resume column reads `—`,
-   because nothing is tailored yet.
+5. Writes `runs/<date>/jobs.json` (carrying each job's full description) and an
+   interim `shortlist.md`.
 6. Pushes every shortlisted job into the Notion "Job Tracker" — a cumulative,
    cross-run view upserted by `job_id`, with a hand-set `Applied` checkbox the
    pipeline never reads back. See [ADR 0001](docs/adr/0001-notion-job-tracker.md).
-
-This phase is irreducibly slow — roughly 14 minutes — because
-`mcp-server-linkedin` serializes every tool call globally, across processes, to
-protect one shared Chromium profile. No amount of parallelism helps. So rather
-than making it faster it was moved off your clock entirely.
-
-### Phase 2 — `/job-hunt-tailor`, when you sit down
-
-7. Tailors your LaTeX resume for the **top 8** shortlisted jobs — reworded
+7. Tailors your LaTeX resume for **every** shortlisted job — reworded
    summary/skills/bullets and updated location, nothing fabricated — each agent
    compiling and, if needed, shrinking its own output to one page before
    returning (see [ADR 0005](docs/adr/0005-shift-left-page-validation.md)).
-   All 8 run as a single concurrent wave.
+   Dispatched in concurrency-bounded waves of 5.
 8. Runs a deterministic ATS keyword check against each compiled PDF, outside any
    agent, so the agent that inserted the keywords never grades whether they
    survived (see [ADR 0008](docs/adr/0008-merge-resume-packager.md)). A job whose
    PDF can't be produced keeps its `.tex` as the fallback.
-9. Re-renders `shortlist.md` with resume paths filled in.
+9. Re-renders `shortlist.md` with every resume path filled in.
 
-The other shortlisted jobs aren't discarded — they stay in `jobs.json` and remain
-tailorable on demand for 7 days:
+The search half is irreducibly slow — roughly 14 minutes — because
+`mcp-server-linkedin` serializes every tool call globally, across processes, to
+protect one shared Chromium profile. No amount of parallelism helps, which is
+why the run fires unattended from a LaunchAgent on wake. The tailoring half
+touches neither LinkedIn nor Notion, so it isn't subject to that lock.
+
+Re-running `/job-hunt` is safe. It refuses to re-search a day that already
+completed, but if that run's tailoring was interrupted it picks up the jobs
+still missing resumes instead of doing nothing.
+
+`/job-hunt-tailor` is a **recovery tool**, not a second phase — for a job that
+failed twice, one job re-tailored by hand, or a job from an earlier run inside
+the 7-day window:
 
 ```
-/job-hunt-tailor --pending          # what's still reachable, and what's expiring
-/job-hunt-tailor Adobe              # tailor one job by company/title or job_id
+/job-hunt-tailor --pending          # what's still missing a resume
+/job-hunt-tailor Adobe              # retry one job by company/title or job_id
 ```
+
+Earlier revisions split this into an unattended search and an attended tailor
+phase, tailoring only the top 8 — both reversed by
+[ADR 0009](docs/adr/0009-single-phase-run.md).
 
 See [`.scratch/job-hunt/spec.md`](.scratch/job-hunt/spec.md) for the full
 spec and design rationale.
@@ -69,7 +71,7 @@ tests/                 pytest unit tests for pipeline/
 tests/fixtures/golden/  Frozen resume-quality corpus speedups are checked against
 scripts/               LaunchAgent installer, unattended search runner, golden-set comparison
 .claude/agents/        job-finder and resume-tailor subagent definitions
-.claude/skills/         /job-hunt search phase, /job-hunt-tailor resume phase, /job-hunt-dry-run
+.claude/skills/         /job-hunt (the whole run), /job-hunt-tailor (recovery), /job-hunt-dry-run
 state/seen-jobs.json    Dedup log across runs (gitignored, generated at runtime)
 state/notion-tracker.json  Created Notion database id (gitignored, generated at runtime)
 runs/<date>/            Daily output: jobs.json, tailored.json, shortlist.md, resumes (gitignored)
@@ -97,7 +99,7 @@ work type, experience level), relevance threshold, `min_shortlist`/
 `location_preference` list.
 
 Install `pdflatex` (e.g. `brew install --cask basictex`) — `/job-hunt`
-checks for it once at the start of every run and fails loudly if it's
+checks for it up front, before the search, and fails loudly if it's
 missing, since resume PDF compilation depends on it (see
 [ADR 0003](docs/adr/0003-resume-pdf-generation.md)).
 
@@ -107,7 +109,7 @@ its database on the first run under your "Upskill 2k26" page.
 
 ## Usage
 
-### Scheduling the search phase
+### Scheduling the daily run
 
 ```
 ./scripts/install-launchagent.sh
@@ -130,18 +132,20 @@ stdio MCP server driving a local browser profile.
 ### Running by hand
 
 ```
-/job-hunt          # search phase — safe to run after the LaunchAgent already has
-/job-hunt-tailor   # tailor the top 8 from today's run
+/job-hunt          # the whole run — safe to invoke after the LaunchAgent already has
 ```
 
-`/job-hunt` refuses to re-search if today's run already completed, so invoking it
-manually after an automatic run is a no-op rather than a duplicate. Output lands
-in `runs/<YYYY-MM-DD>/`: `jobs.json`, `shortlist.md`, `tailored.json`, and
+`/job-hunt` refuses to re-search a day that already completed. If that run's
+tailoring was interrupted it resumes the jobs still missing resumes; if nothing
+is pending it's a no-op rather than a duplicate. Output lands in
+`runs/<YYYY-MM-DD>/`: `jobs.json`, `shortlist.md`, `tailored.json`, and
 `resumes/` (`.tex` + `.pdf` per tailored job), plus the Notion database itself.
 
+Recovery, when a job didn't come out of the run with a resume:
+
 ```
-/job-hunt-tailor --pending             # what's still tailorable, and what expires soon
-/job-hunt-tailor 4444888908            # one job by id
+/job-hunt-tailor --pending             # what's still missing a resume, and what expires soon
+/job-hunt-tailor 4444888908            # retry one job by id
 /job-hunt-tailor Canonical             # or by company/title fragment
 /job-hunt-tailor --date 2026-09-01     # an earlier run, within the 7-day window
 ```
@@ -152,10 +156,11 @@ in `runs/<YYYY-MM-DD>/`: `jobs.json`, `shortlist.md`, `tailored.json`, and
 /job-hunt-dry-run
 ```
 
-Runs **both** phases end to end against a capped ~15-posting search, tailoring
-only the top 3 — so the handoff between the phases is exercised, which is the
-part most likely to break. Real LinkedIn data and a real Notion push; it skips
-writing `state/seen-jobs.json` and writes to `runs/<date>-dryrun/`. See
+Runs the pipeline end to end against a capped ~15-posting search, tailoring only
+3 jobs rather than every shortlisted one — enough to exercise search, scoring,
+the Notion push, wave dispatch, the ATS check and the re-render, without paying
+for a full day. Real LinkedIn data and a real Notion push; it skips writing
+`state/seen-jobs.json` and writes to `runs/<date>-dryrun/`. See
 [ADR 0006](docs/adr/0006-dry-run-mode.md).
 
 ## Development
@@ -186,10 +191,13 @@ performed is still an open decision — see the map below.
   [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 - [`docs/agents/domain.md`](docs/agents/domain.md) — where domain context
   (`CONTEXT.md`, ADRs) lives for this repo.
-- [`.scratch/job-hunt-speedup/map.md`](.scratch/job-hunt-speedup/map.md) — the
-  in-progress plan for cutting a run's attended time from ~43 minutes to ≤15,
-  with per-decision tickets in
-  [`.scratch/job-hunt-speedup/issues/`](.scratch/job-hunt-speedup/issues/).
+- [`.scratch/job-hunt-speedup/map.md`](.scratch/job-hunt-speedup/map.md) — a
+  superseded plan for cutting a run's *attended* time to ≤15 minutes, with
+  per-decision tickets in
+  [`.scratch/job-hunt-speedup/issues/`](.scratch/job-hunt-speedup/issues/). Its
+  two-phase split and top-8 cap were reversed by ADR 0009; its other outcomes
+  (the LaunchAgent trigger, the merged tailor agent, the deterministic ATS gate,
+  the golden corpus) still stand.
 - [`tests/fixtures/golden/`](tests/fixtures/golden/) — the frozen resume-quality
   corpus that speedups are checked against.
 - [`CONTEXT.md`](CONTEXT.md) — domain glossary.
@@ -215,3 +223,6 @@ performed is still an open decision — see the map below.
 - [`docs/adr/0008-merge-resume-packager.md`](docs/adr/0008-merge-resume-packager.md)
   — why `resume-packager` was deleted, and why moving the ATS check into
   deterministic Python makes the gate *more* independent, not less.
+- [`docs/adr/0009-single-phase-run.md`](docs/adr/0009-single-phase-run.md) — why
+  the search/tailor split and the top-8 eager set were reversed, so one
+  `/job-hunt` call tailors every shortlisted job in waves of 5.

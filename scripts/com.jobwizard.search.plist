@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  LaunchAgent for the job-hunt search phase. Install with scripts/install-launchagent.sh.
+  LaunchAgent for the daily job-hunt run. Install with scripts/install-launchagent.sh.
 
   StartCalendarInterval, not StartInterval: only the former catches up after
   sleep. man launchd.plist is explicit that StartInterval "will be missed due to
@@ -10,7 +10,8 @@
   missed firings into one.
 
   RunAtLoad is deliberately false: loading the agent (at login, or when
-  installing it) should not kick off a 14-minute LinkedIn search.
+  installing it) should not kick off a full run — a 14-minute LinkedIn search
+  followed by a tailored resume for every shortlisted job.
 -->
 <plist version="1.0">
 <dict>

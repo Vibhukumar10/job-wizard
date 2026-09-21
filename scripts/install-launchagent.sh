@@ -28,5 +28,5 @@ echo "fallback: see .scratch/job-hunt-speedup/issues/07-choose-unattended-trigge
 echo
 echo "Check status:  launchctl print gui/$UID/$LABEL | head -20"
 echo "Run it now:    launchctl kickstart -p gui/$UID/$LABEL"
-echo "Logs:          $REPO/state/logs/search-phase.log"
+echo "Logs:          $REPO/state/logs/job-hunt.log"
 echo "Uninstall:     launchctl bootout gui/$UID/$LABEL && rm $TARGET"
