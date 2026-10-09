@@ -1,5 +1,5 @@
 #!/bin/bash
-# Runs the job-hunt search phase unattended, invoked by the LaunchAgent.
+# Runs /job-hunt unattended (search, then tailor every shortlisted job), invoked by the LaunchAgent.
 #
 # Fires on wake, not on the clock. launchd's StartCalendarInterval catches up a
 # missed firing when the machine wakes ("Unlike cron which skips job invocations

@@ -53,11 +53,11 @@ The maximum years of experience a job may require (currently 4) before it's reje
 _Avoid_: Seniority limit, years filter
 
 **Search Phase**:
-The unattended half of a run, invoked as `/job-hunt`: search LinkedIn, score for relevance, write `jobs.json` and a resume-less `shortlist.md`, push to the Job Tracker, and record every shortlisted job as a Seen Job. Produces no resumes. Runs off the user's clock because LinkedIn tool calls are serialized globally and can't be made faster — only moved.
+The first half of a `/job-hunt` run: search LinkedIn, score for relevance, write `jobs.json` and a resume-less `shortlist.md`, push to the Job Tracker, and record every shortlisted job as a Seen Job. Produces no resumes itself; `/job-hunt` runs the Tailor Phase straight after it. Runs off the user's clock because LinkedIn tool calls are serialized globally and can't be made faster — only moved.
 _Avoid_: Search step, find phase
 
 **Tailor Phase**:
-The attended half, invoked as `/job-hunt-tailor`: read a completed run's `jobs.json`, tailor the top 8 untailored jobs (or one named job), ATS-check each compiled PDF, and re-render `shortlist.md`. Refuses to run against an incomplete `jobs.json` — the top-8 selection needs the whole scored set.
+The second half of a `/job-hunt` run, and also invocable on its own as `/job-hunt-tailor`: read a completed run's `jobs.json`, tailor untailored jobs — every one when run by `/job-hunt`, the top 8 by default when invoked alone, or one named job, ATS-check each compiled PDF, and re-render `shortlist.md`. Refuses to run against an incomplete `jobs.json` — the top-8 selection needs the whole scored set.
 _Avoid_: Resume step, tailoring run
 
 **Seen Job**:
