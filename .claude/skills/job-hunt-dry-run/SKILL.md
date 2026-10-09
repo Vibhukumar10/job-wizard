@@ -9,13 +9,12 @@ A fast, minimal pass through the pipeline, sized for validating it end-to-end ra
 than for a real day's job search. Real LinkedIn data, a real push to the Notion Job
 Tracker, just a much smaller pool of jobs.
 
-**This skill deliberately runs both phases back to back.** The real pipeline is split —
-[`/job-hunt`](../job-hunt/SKILL.md) searches unattended and
-[`/job-hunt-tailor`](../job-hunt-tailor/SKILL.md) tailors later — but a smoke test that
-only exercised half of it would miss exactly the handoff most likely to break. Run
-`/job-hunt`'s steps, then `/job-hunt-tailor`'s, with the differences below.
+**This skill runs both phases back to back**, as [`/job-hunt`](../job-hunt/SKILL.md)
+itself does: its steps 1–7 search, its step 8 runs
+[`/job-hunt-tailor`](../job-hunt-tailor/SKILL.md)'s default mode. Follow `/job-hunt`'s
+steps with the differences below.
 
-## Search-phase differences (`/job-hunt` steps 1–8)
+## Search-phase differences (`/job-hunt` steps 1–7)
 
 - **Step 1 (run date / guard):** use `runs/<date>-dryrun/` everywhere the real skill uses
   `runs/<date>/`. This keeps dry-run output fully isolated, so a dry run and a real run
@@ -38,11 +37,11 @@ only exercised half of it would miss exactly the handoff most likely to break. R
   search phase rather than in a separate orchestration step. If you are following
   `/job-hunt`'s steps and reach `append-seen`, stop and skip it.
 
-## Tailor-phase differences (`/job-hunt-tailor`)
+## Tailor-phase differences (`/job-hunt` step 8)
 
 - Operate on `runs/<date>-dryrun/`, not today's real run.
-- **Tailor at most 3 jobs**, not the usual top 8 — enough to exercise the wave dispatch,
-  the ATS check, and the `shortlist.md` re-render without paying for eight agents. Use
+- **Tailor at most 3 jobs**, not every shortlisted job — enough to exercise the wave dispatch,
+  the ATS check, and the `shortlist.md` re-render without paying for a full wave. Use
   `select-eager --count 3`.
 - Everything else is unchanged: one wave, the retry wave, the deterministic ATS check,
   the keyword-fix pass, `tailored.json`, and the re-render.

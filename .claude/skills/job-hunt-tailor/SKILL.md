@@ -1,13 +1,17 @@
 ---
 name: job-hunt-tailor
-description: Tailors resumes for jobs an earlier /job-hunt search already shortlisted — the top 8 by default, or one job named by job_id or company/title. Compiles and ATS-checks each PDF, then updates the run's shortlist.md. Use when the user runs /job-hunt-tailor, asks for resumes for today's shortlist, wants a resume for one specific job, or asks what's still pending.
+description: Tailors resumes on demand for jobs an earlier /job-hunt run shortlisted — one job named by job_id or company/title, the next top 8, or an earlier run. Compiles and ATS-checks each PDF, then updates the run's shortlist.md. /job-hunt already tailors every shortlisted job itself; use this when the user runs /job-hunt-tailor, wants a resume for one specific job, wants to fill in jobs a run missed, or asks what's still pending.
 ---
 
 # /job-hunt-tailor
 
-The **attended phase**. `/job-hunt` has already searched, scored, and written
-`runs/<date>/jobs.json`; this turns some of those jobs into tailored resumes while the
-user is actually at the machine.
+The **tailor phase**. `/job-hunt` has already searched, scored, and written
+`runs/<date>/jobs.json`; this turns some of those jobs into tailored resumes.
+
+`/job-hunt` runs this phase's steps 4–10 itself, right after the search, for **every**
+shortlisted job (not just the top 8) — see [ADR 0009](../../../docs/adr/0009-job-hunt-tailors-in-one-go.md). Invoked
+directly, this skill is for on-demand work: one named job, the next 8 past the ones
+already tailored, `--pending`, or an earlier run.
 
 It tailors the **top 8 by score** by default, not everything. The rest stay in
 `jobs.json` and remain tailorable on demand for 7 days. That is not a narrowing of the

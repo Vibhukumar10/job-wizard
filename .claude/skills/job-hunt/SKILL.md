@@ -1,39 +1,44 @@
 ---
 name: job-hunt
-description: Runs the unattended half of the daily job hunt — searches LinkedIn for new postings, scores them for relevance, and writes the run's jobs.json plus a shortlist. Produces no resumes; /job-hunt-tailor does that afterwards. Use when the user runs /job-hunt, asks to search for jobs, or refreshes their shortlist.
+description: Runs the whole daily job hunt in one go — searches LinkedIn for new postings, scores them, writes the run's jobs.json and shortlist, then tailors a resume for every shortlisted job. Use when the user runs /job-hunt, asks to search for jobs, or refreshes their shortlist.
 ---
 
 # /job-hunt
 
-The **search phase**. It finds and scores the day's jobs, then stops — tailoring is
-`/job-hunt-tailor`, run separately when the user is actually at the machine.
+The **whole daily run**: the search phase (steps 1–7), then the tailor phase (step 8)
+for **every** shortlisted job, back to back. No separate `/job-hunt-tailor` call is needed.
+`/job-hunt-tailor` still exists for on-demand work — one named job, `--pending`, or an
+earlier run. See [ADR 0009](../../../docs/adr/0009-job-hunt-tailors-in-one-go.md).
 
-The split exists because LinkedIn tool calls are serialized globally by
+The search phase is slow because LinkedIn tool calls are serialized globally by
 `mcp-server-linkedin` (an `asyncio.Lock` plus a cross-process profile lease), so this
 phase is irreducibly slow — roughly one call every 15 seconds — and no amount of
 parallelism helps. Rather than making it faster, it was moved off the user's clock:
-this phase fires unattended from a LaunchAgent when the machine wakes, so its ~14
-minutes cost nobody anything. See `.scratch/job-hunt-speedup/map.md`.
+this skill fires unattended from a LaunchAgent when the machine wakes, so its ~14
+minutes cost nobody anything — and now the tailoring happens in that same run. See `.scratch/job-hunt-speedup/map.md`.
 
 Read `.scratch/job-hunt/spec.md` if you need the full rationale behind a step below.
 
 ## Steps
 
 1. **Determine the run date and check the guard.** Use today's date, `YYYY-MM-DD`.
+   Also run `command -v pdflatex` now and remember the result — step 8 needs it, and a
+   missing binary should be known before the 14-minute search, not after.
    ```
    uv run python -m pipeline.cli run-status runs/<date>
    ```
-   - `complete` — today's search already ran. **Stop and say so.** This is the
+   - `complete` — today's search already ran. **Don't re-search.** This is the
      once-per-day guard, and it is the normal outcome when the LaunchAgent has already
-     fired and the user then invokes `/job-hunt` by hand. Don't re-search.
+     fired and the user then invokes `/job-hunt` by hand. Check
+     `uv run python -m pipeline.cli read-tailored runs/<date>`: if it returns `{}`, the
+     search finished but tailoring never did — skip to step 8. Otherwise stop and say
+     today's run is done (point at `/job-hunt-tailor` for more).
    - `in_flight` — another search is running right now. Stop; don't start a second one
      against the same LinkedIn browser profile.
    - `missing` — proceed. (A crashed earlier run reports `missing` once its `.tmp` is
      over 45 minutes old, so a dead search never wedges the pipeline.)
 
-2. **Create the run folders.** `runs/<date>/` and `runs/<date>/resumes/`. The `resumes/`
-   directory is created here even though this phase writes no resumes, so the tailor
-   phase never has to guess whether it exists.
+2. **Create the run folders.** `runs/<date>/` and `runs/<date>/resumes/`.
 
 3. **Get the shortlist.** Dispatch the `job-finder` subagent (via the Agent tool) with no
    special input beyond its own instructions — it reads `config/search.yaml`,
@@ -60,9 +65,9 @@ Read `.scratch/job-hunt/spec.md` if you need the full rationale behind a step be
    ```
    uv run python -m pipeline.cli render-shortlist --jobs '<json shortlist>' > runs/<date>/shortlist.md
    ```
-   Every job's Resume column renders as `—`, because nothing has been tailored. That's
-   the expected state of a fresh run. The file is genuinely useful at this point: the
-   user can read the day's jobs and decide what to tailor before any tailoring happens.
+   Every job's Resume column renders as `—` for now. Step 8 re-renders it with resume
+   paths; writing it here first means a failed tailor phase still leaves a usable
+   shortlist.
 
 6. **Push every shortlisted job to the Notion Job Tracker.** Write-only, upserted by
    `job_id`, and it never blocks the rest of the run — see
@@ -100,22 +105,34 @@ Read `.scratch/job-hunt/spec.md` if you need the full rationale behind a step be
    steps, and its seen-log exclusion now lives *here* rather than in a later
    orchestration step.
 
-8. **Report back**: how many jobs were found and shortlisted (and how many of those were
+8. **Tailor every shortlisted job.** Follow [`/job-hunt-tailor`](../job-hunt-tailor/SKILL.md)'s
+   default mode against `runs/<date>/` — its steps 4–10 — with one change to step 4: take
+   **all** untailored jobs from `jobs.json`, not `select-eager --count 8`. Then one
+   concurrent `resume-tailor` wave (up to `max_shortlist` agents), the retry wave, the deterministic ATS check, the
+   keyword-fix wave, `record-tailored`, and the `shortlist.md` re-render. Skip its
+   step 3 guard: `jobs.json` was just written complete in step 4.
+   - If `pdflatex` was missing in step 1, skip this step and say so plainly —
+     installing it (`brew install --cask basictex`) is one-time setup. The search
+     results are still saved; `/job-hunt-tailor` picks them up once it's installed.
+   - An empty shortlist means nothing to tailor; skip.
+
+9. **Report back**: how many jobs were found and shortlisted (and how many of those were
    `min_shortlist` backfill vs. organically above `relevance_threshold`), how many Notion
-   syncs failed, and the path to `runs/<date>/shortlist.md`. Then tell the user to run
-   `/job-hunt-tailor` when they want resumes — this phase deliberately produces none.
+   syncs failed, how many were tailored / failed / hit `pdf_error`, how many stay
+   pending, and the path to `runs/<date>/shortlist.md`. Finish with the age-out warning
+   from `uv run python -m pipeline.cli pending runs` if there is one.
 
 ## Notes
 
-- Step 3 is the only LLM-judgment step here. Everything else routes through the tested
+- Steps 3 and 8 are the only LLM-judgment steps here. Everything else routes through the tested
   `pipeline` module via `uv run python -m pipeline.cli ...`. If you find yourself
   hand-writing dedup, shortlist selection, or markdown rendering, stop — that logic
   already exists in `pipeline/`.
 - Step 6's Notion calls involve tool use but no judgment: data is shaped by
   `notion-properties` and the step only decides create-vs-update. It stays outside
   `pipeline/` because it needs the connector's already-authorized access (ADR 0001).
-- **No `pdflatex` check here.** This phase compiles nothing. The toolchain check belongs
-  to `/job-hunt-tailor`, which is where a missing binary would actually bite.
+- A missing `pdflatex` never blocks the search. Step 1 checks it early so step 8 can
+  skip cleanly instead of every tailor agent failing on its own.
 - This skill is invoked by the LaunchAgent on wake, and manually. Behaviour is identical
   either way — step 1's guard is what makes a manual invocation after an automatic one
   safe.
